@@ -1,0 +1,7 @@
+
+
+design choices, limits:
+* no seperated window for user input and filtered result
+    * the user should know what he is doing
+* no cache
+    * use fond for the caching version
