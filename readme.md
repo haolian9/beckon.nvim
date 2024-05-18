@@ -19,3 +19,7 @@ i need a lightweight fuzzy matching picker in nvim, to replace fzf in some useca
 * zig 0.11
 * nvim 0.10.*
 * haolian9/infra.nvim
+
+
+## credits
+[the fuzzy matching algorithm](https://github.com/natecraddock/zf) at v0.9.1
