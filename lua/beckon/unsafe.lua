@@ -2,6 +2,8 @@ local M = {}
 
 local ffi = require("ffi")
 
+local fs = require("infra.fs")
+
 ffi.cdef([[
   double rankToken(
     const char *str, const char *filename, const char *token,
@@ -9,7 +11,12 @@ ffi.cdef([[
   );
 ]])
 
-local C = ffi.load("/srv/playground/beckon.nvim/zig-out/lib/libzf.so", false)
+local C
+do
+  local lua_root = fs.resolve_plugin_root("beckon", "unsafe.lua")
+  local root = fs.parent(fs.parent(lua_root))
+  C = ffi.load(fs.joinpath(root, "zig-out/lib/libzf.so"), false)
+end
 
 ---@param str string
 ---@param filename? string
