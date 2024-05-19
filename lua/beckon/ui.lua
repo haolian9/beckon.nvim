@@ -13,6 +13,7 @@
 
 local augroups = require("infra.augroups")
 local buflines = require("infra.buflines")
+local dictlib = require("infra.dictlib")
 local Ephemeral = require("infra.Ephemeral")
 local feedkeys = require("infra.feedkeys")
 local jelly = require("infra.jellyfish")("beckon", "debug")
@@ -29,6 +30,44 @@ local uv = vim.loop
 
 ---@alias beckon.Action 'cr'|'space'|'v'|'o'|'t'
 ---@alias beckon.OnPick fun(query: string, action: beckon.Action, choice: string)
+
+--stolen from fond.fzf
+--show prompt at cursor line when possible horizental center
+local function resolve_geometry()
+  local winid = api.nvim_get_current_win()
+
+  local winfo = assert(vim.fn.getwininfo(winid)[1])
+  local win_width, win_height = winfo.width, winfo.height
+  -- takes folding into account
+  local win_row = vim.fn.winline()
+
+  --below magic numbers are based on
+  --* urxvt, width=136, height=30
+  --* st, width=174, height=39
+
+  local width, col
+  if win_width > 70 then
+    width = math.floor(win_width * 0.6)
+    col = math.floor(win_width * 0.2)
+  elseif win_width > 45 then
+    width = math.floor(win_width * 0.75)
+    col = math.floor(win_width * 0.125)
+  else
+    width = win_width - 2 -- borders
+    col = 0
+  end
+
+  local height, row
+  if win_height > 15 then
+    height = math.floor(win_height * 0.45)
+    row = math.max(win_row - height - 1, 0)
+  else
+    height = win_height - 2 -- borders
+    row = 0
+  end
+
+  return { width = width, height = height, row = row, col = col }
+end
 
 ---@param bufnr integer
 ---@return string @always be lowercase
@@ -168,14 +207,14 @@ return function(candidates, default_query, on_pick)
     })
   end
 
-  local winid = rifts.open.fragment(
-    --
-    bufnr,
-    true,
-    { relative = "editor", border = "single" },
-    { width = 0.5, height = 0.8, vertical = "mid", horizontal = "mid", ns = facts.floatwin_ns }
-  )
-  prefer.wo(winid, "wrap", false)
+  local winid
+  do
+    local winopts = dictlib.merged({ relative = "win", border = "single", zindex = 250 }, resolve_geometry())
+    winid = rifts.open.win(bufnr, true, winopts)
+
+    api.nvim_win_set_hl_ns(winid, facts.floatwin_ns)
+    prefer.wo(winid, "wrap", false)
+  end
 
   feedkeys("ggA", "n")
 end
