@@ -44,10 +44,12 @@ do
     local candidates
     do
       local iter = fn.iter(api.nvim_list_bufs())
+      local curbufnr = api.nvim_get_current_buf()
+      iter = fn.filter(function(bufnr) return bufnr ~= curbufnr end, iter)
       iter = fn.filter(is_normal_buf, iter)
       iter = fn.map(format_line, iter)
       candidates = fn.tolist(iter)
-      if #candidates == 1 then return jelly.info("no other buffers") end
+      if #candidates == 0 then return jelly.info("no other buffers") end
     end
 
     ui(candidates, last_query, function(query, action, line)
