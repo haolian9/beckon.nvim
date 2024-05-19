@@ -54,9 +54,6 @@ do
 
   ---@param action beckon.Action
   function Impl:pick_cursor(action)
-    local count = buflines.count(self.bufnr)
-    if count == 1 then return jelly.debug("no match") end
-
     local lnum = wincursor.lnum()
     if lnum == 0 then return jelly.debug("not a match") end
 
@@ -73,10 +70,11 @@ do
 
   ---@param action beckon.Action
   function Impl:pick_first(action)
-    local count = buflines.count(self.bufnr)
-    if count == 1 then return jelly.debug("no match") end
-
-    local line = assert(buflines.line(self.bufnr, 1))
+    local line = buflines.line(self.bufnr, 1)
+    if line == nil then
+      close_current_win()
+      return jelly.info("no match")
+    end
     jelly.debug("picked %s", line)
 
     local query = get_query(self.bufnr)
