@@ -7,6 +7,7 @@ local jelly = require("infra.jellyfish")("beckon", "debug")
 local prefer = require("infra.prefer")
 local strlib = require("infra.strlib")
 
+local facts = require("beckon.facts")
 local ui = require("beckon.ui")
 
 local api = vim.api
@@ -79,6 +80,30 @@ do
       ---todo: honor the action
       local _ = action
       ex.cmd("edit", arg)
+    end)
+  end
+end
+
+do
+  local function load_digraphs()
+    local path = fs.joinpath(facts.root, "lua/beckon/digraphs")
+    jelly.debug("digraphs path: %s", path)
+    return fn.tolist(io.lines(path))
+  end
+
+  ---@type string[]|nil
+  local candidates
+
+  local last_query
+
+  function M.digraphs()
+    if candidates == nil then candidates = load_digraphs() end
+
+    ui(candidates, last_query, function(query, _, line)
+      last_query = query
+
+      local char = assert(fn.split_iter(line, " ")())
+      api.nvim_put({ char }, "c", true, false)
     end)
   end
 end

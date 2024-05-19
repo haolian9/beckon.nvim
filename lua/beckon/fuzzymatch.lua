@@ -2,6 +2,8 @@ local ffi = require("ffi")
 
 local fs = require("infra.fs")
 
+local facts = require("beckon.facts")
+
 ffi.cdef([[
   double rankToken(
     const char *str, const char *filename, const char *token,
@@ -9,12 +11,7 @@ ffi.cdef([[
   );
 ]])
 
-local C
-do
-  local lua_root = fs.resolve_plugin_root("beckon", "fuzzymatch.lua")
-  local root = fs.parent(fs.parent(lua_root))
-  C = ffi.load(fs.joinpath(root, "zig-out/lib/libzf.so"), false)
-end
+local C = ffi.load(fs.joinpath(facts.root, "zig-out/lib/libzf.so"), false)
 
 ---@param str string @it will be converted to lowercase internally
 ---@param filename? string @meaning?
