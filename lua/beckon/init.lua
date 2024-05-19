@@ -9,8 +9,35 @@ local strlib = require("infra.strlib")
 
 local facts = require("beckon.facts")
 local ui = require("beckon.ui")
+local ropes = require("string.buffer")
 
 local api = vim.api
+
+local contracts = {}
+do
+  ---@param str string
+  ---@param ... string|number
+  ---@return string line @pattern='{str} ({meta,meta})'
+  function contracts.format_line(str, ...)
+    local rope = ropes.new()
+    for i = 1, select("#", ...) do
+      rope:putf(",%s", select(i, ...))
+    end
+    local meta = rope:skip(1):get()
+    return string.format("%s (%s)", str, meta)
+  end
+
+  ---@param line string
+  ---@return string str
+  ---@return string|number ... meta
+  function contracts.parse_line(line)
+    local paren_at = strlib.rfind(line, "(")
+    assert(paren_at, line)
+    local str = string.sub(line, 1, paren_at - #" (")
+    local right = string.sub(line, paren_at + #"(", #line - #")")
+    return str, unpack(fn.split(right, ","))
+  end
+end
 
 do
   local function is_normal_buf(bufnr)
@@ -19,23 +46,6 @@ do
     if strlib.find(name, "://") then return false end
     if prefer.bo(bufnr, "buftype") ~= "" then return false end
     return true
-  end
-
-  ---@param bufnr integer
-  ---@return string
-  local function format_line(bufnr)
-    local bufname = api.nvim_buf_get_name(bufnr)
-    local name = fs.shorten(bufname)
-    return string.format("%d %s", bufnr, name)
-  end
-
-  ---@param line string
-  ---@return integer
-  local function extract_bufnr(line)
-    local bufnr
-    bufnr = assert(select(1, string.match(line, "^(%d+) ")), line)
-    bufnr = assert(tonumber(bufnr), bufnr)
-    return bufnr
   end
 
   local last_query
@@ -47,7 +57,10 @@ do
       local curbufnr = api.nvim_get_current_buf()
       iter = fn.filter(function(bufnr) return bufnr ~= curbufnr end, iter)
       iter = fn.filter(is_normal_buf, iter)
-      iter = fn.map(format_line, iter)
+      iter = fn.map(function(bufnr)
+        local name = fs.shorten(api.nvim_buf_get_name(bufnr))
+        return contracts.format_line(name, bufnr)
+      end, iter)
       candidates = fn.tolist(iter)
       if #candidates == 0 then return jelly.info("no other buffers") end
     end
@@ -55,7 +68,9 @@ do
     ui(candidates, last_query, function(query, action, line)
       last_query = query
 
-      local bufnr = extract_bufnr(line)
+      local _, bufnr = contracts.parse_line(line)
+      bufnr = assert(tonumber(bufnr))
+
       ---todo: honor the action
       local _ = action
       api.nvim_win_set_buf(0, bufnr)
@@ -69,16 +84,18 @@ do
   function M.args()
     local candidates = {}
     do --no matter it's global or win-local
-      for i = 0, vim.fn.argc() - 1 do
-        table.insert(candidates, string.format("%d %s", i, vim.fn.argv(i)))
+      local nargs = vim.fn.argc()
+      if nargs == 0 then return jelly.info("empty arglist") end
+
+      for i in fn.range(nargs) do
+        table.insert(candidates, contracts.format_line(vim.fn.argv(i), i))
       end
-      if #candidates == 0 then return jelly.info("empty arglist") end
     end
 
     ui(candidates, last_query, function(query, action, line)
       last_query = query
 
-      local arg = assert(select(1, string.match(line, "^%d+ (.+)$")))
+      local arg = contracts.parse_line(line)
       ---todo: honor the action
       local _ = action
       ex.cmd("edit", arg)
@@ -89,7 +106,6 @@ end
 do
   local function load_digraphs()
     local path = fs.joinpath(facts.root, "lua/beckon/digraphs")
-    jelly.debug("digraphs path: %s", path)
     return fn.tolist(io.lines(path))
   end
 
