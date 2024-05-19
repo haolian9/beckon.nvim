@@ -2,20 +2,19 @@ a fuzzy matching picker
 
 
 ## motivation
-i need a lightweight fuzzy matching picker in nvim, to replace fzf in **some** usecases:
-* buffers, arglist
-* lsp document/workspace symbol
-* ui.select
-* ...
+i need a lightweight fuzzy matching picker in nvim, to replace fzf in **some** usecases
 
 ## status
-* WIP
+* just works
 * the use of ffi may crash nvim
 
 ## sources
-* buffers
-* arglist
-* digraphs
+* [x] buffers
+* [x] arglist
+* [x] digraphs
+* [ ] lsp document symbol
+* [ ] lsp workspace symbol
+* [ ] ui.select
 
 ## prerequisites
 * zig 0.11
