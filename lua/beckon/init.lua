@@ -16,7 +16,7 @@ local api = vim.api
 local contracts = {}
 do
   ---@param str string
-  ---@param ... string|number
+  ---@param ... string|number @meta's
   ---@return string line @pattern='{str} ({meta,meta})'
   function contracts.format_line(str, ...)
     local rope = ropes.new()
@@ -105,7 +105,7 @@ end
 
 do
   local function load_digraphs()
-    local path = fs.joinpath(facts.root, "lua/beckon/digraphs")
+    local path = fs.joinpath(facts.root, "data/digraphs")
     return fn.tolist(io.lines(path))
   end
 
