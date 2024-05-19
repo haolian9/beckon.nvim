@@ -2,6 +2,7 @@ local M = {}
 
 local ex = require("infra.ex")
 local fn = require("infra.fn")
+local fs = require("infra.fs")
 local jelly = require("infra.jellyfish")("beckon", "debug")
 local prefer = require("infra.prefer")
 local strlib = require("infra.strlib")
@@ -19,39 +20,67 @@ do
     return true
   end
 
+  ---@param bufnr integer
+  ---@return string
+  local function format_line(bufnr)
+    local bufname = api.nvim_buf_get_name(bufnr)
+    local name = fs.shorten(bufname)
+    return string.format("%d %s", bufnr, name)
+  end
+
+  ---@param line string
+  ---@return integer
+  local function extract_bufnr(line)
+    local bufnr
+    bufnr = assert(select(1, string.match(line, "^(%d+) ")), line)
+    bufnr = assert(tonumber(bufnr), bufnr)
+    return bufnr
+  end
+
+  local last_query
+
   function M.buffers()
     local candidates
     do
       local iter = fn.iter(api.nvim_list_bufs())
       iter = fn.filter(is_normal_buf, iter)
-      iter = fn.map(function(bufnr) return string.format("#%d %s", bufnr, api.nvim_buf_get_name(bufnr)) end, iter)
+      iter = fn.map(format_line, iter)
       candidates = fn.tolist(iter)
       if #candidates == 1 then return jelly.info("no other buffers") end
     end
 
-    ui(candidates, function(line)
-      local bufnr
-      bufnr = assert(select(1, string.match(line, "^#(%d+) ")), line)
-      bufnr = assert(tonumber(bufnr))
+    ui(candidates, last_query, function(query, action, line)
+      last_query = query
 
+      local bufnr = extract_bufnr(line)
+      ---todo: honor the action
+      local _ = action
       api.nvim_win_set_buf(0, bufnr)
     end)
   end
 end
 
-function M.args()
-  local candidates = {}
-  do --no matter it's global or win-local
-    for i = 0, vim.fn.argc() - 1 do
-      table.insert(candidates, string.format("#%d %s", i, vim.fn.argv(i)))
-    end
-    if #candidates == 0 then return jelly.info("empty arglist") end
-  end
+do
+  local last_query
 
-  ui(candidates, function(line)
-    local arg = assert(select(1, string.match(line, "^#%d+ (.+)$")))
-    ex.cmd("edit", arg)
-  end)
+  function M.args()
+    local candidates = {}
+    do --no matter it's global or win-local
+      for i = 0, vim.fn.argc() - 1 do
+        table.insert(candidates, string.format("%d %s", i, vim.fn.argv(i)))
+      end
+      if #candidates == 0 then return jelly.info("empty arglist") end
+    end
+
+    ui(candidates, last_query, function(query, action, line)
+      last_query = query
+
+      local arg = assert(select(1, string.match(line, "^%d+ (.+)$")))
+      ---todo: honor the action
+      local _ = action
+      ex.cmd("edit", arg)
+    end)
+  end
 end
 
 return M

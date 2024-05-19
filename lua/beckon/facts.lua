@@ -16,4 +16,9 @@ do
   M.floatwin_ns = ns
 end
 
+M.querysuffix_ns = api.nvim_create_namespace("beckon:querysuffix")
+
+--in milliseconds
+M.update_interval = 125
+
 return M
