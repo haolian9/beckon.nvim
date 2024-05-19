@@ -12,6 +12,11 @@ i need a lightweight fuzzy matching picker in nvim, to replace fzf in **some** u
 * WIP
 * the use of ffi may crash nvim
 
+## sources
+* buffers
+* arglist
+* digraphs
+
 ## prerequisites
 * zig 0.11
 * nvim 0.10.*
