@@ -21,7 +21,7 @@ i need a lightweight fuzzy matching picker in nvim, to replace fzf in **some** u
     * althrough Beckon is not supposed to be used for very large dataset at the very first.
 
 ## prerequisites
-* zig 0.11
+* zig 0.12
 * nvim 0.10.*
 * haolian9/infra.nvim
 
