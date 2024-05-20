@@ -29,6 +29,8 @@ end
 
 M.querysuffix_ns = api.nvim_create_namespace("beckon:querysuffix")
 
+M.onkey_ns = api.nvim_create_namespace("beckon:onkey")
+
 --in milliseconds
 M.update_interval = 75
 

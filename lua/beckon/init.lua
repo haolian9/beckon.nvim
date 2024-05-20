@@ -126,4 +126,21 @@ do
   end
 end
 
+do
+  local last_query
+  function M.large()
+    local candidates = fn.tolist(io.lines(
+      --100k
+      -- "/tmp/1000-nvim-fzf/files-760ed46bb93ac0c829b283860464f408"
+      --29M
+      "/tmp/1000-nvim-fzf/files-e70f81e7dc238ca3173826940e6d61c2"
+    ))
+
+    ui(candidates, last_query, function(query, _, line)
+      last_query = query
+      jelly.info("picked: %s", line)
+    end)
+  end
+end
+
 return M

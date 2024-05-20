@@ -20,6 +20,7 @@ local jelly = require("infra.jellyfish")("beckon", "debug")
 local bufmap = require("infra.keymap.buffer")
 local prefer = require("infra.prefer")
 local rifts = require("infra.rifts")
+local strlib = require("infra.strlib")
 local wincursor = require("infra.wincursor")
 
 local facts = require("beckon.facts")
@@ -28,7 +29,7 @@ local fuzzymatch = require("beckon.fuzzymatch")
 local api = vim.api
 local uv = vim.loop
 
----@alias beckon.Action 'cr'|'space'|'v'|'o'|'t'
+---@alias beckon.Action 'cr'|'space'|'i'|'a'|'v'|'o'|'t'
 ---@alias beckon.OnPick fun(query: string, action: beckon.Action, choice: string)
 
 --stolen from fond.fzf
@@ -76,6 +77,17 @@ local function get_query(bufnr)
   return string.lower(line)
 end
 
+---@param callback fun(key: string)
+local function on_first_key(callback)
+  vim.schedule(function() --to ensure no more inputs
+    vim.on_key(function(key)
+      ---@diagnostic disable-next-line: param-type-mismatch
+      vim.on_key(nil, facts.onkey_ns)
+      callback(key)
+    end, facts.onkey_ns)
+  end)
+end
+
 local RHS
 do
   ---@class beckon.RHS
@@ -92,12 +104,12 @@ do
   function Impl:goto_query_line() feedkeys("ggA", "n") end
 
   ---@param action beckon.Action
+  ---@return boolean? picked @nil=false
   function Impl:pick_cursor(action)
     local lnum = wincursor.lnum()
-    if lnum == 0 then return jelly.debug("not a match") end
+    if lnum == 0 then return jelly.info("not a match") end
 
     local line = assert(buflines.line(self.bufnr, lnum))
-    jelly.debug("picked %s", line)
 
     local query = get_query(self.bufnr)
     close_current_win()
@@ -105,6 +117,14 @@ do
     vim.schedule(function() ---to avoid possible E1159
       self.on_pick(query, action, line)
     end)
+
+    return true
+  end
+
+  ---@param action_or_key 'i'|'a'|'v'|'o'|'t'
+  function Impl:pick_cursor_or_passthrough(action_or_key)
+    if self:pick_cursor(action_or_key) then return end
+    feedkeys.keys(action_or_key, "n")
   end
 
   ---@param action beckon.Action
@@ -114,7 +134,6 @@ do
       close_current_win()
       return jelly.info("no match")
     end
-    jelly.debug("picked %s", line)
 
     local query = get_query(self.bufnr)
     close_current_win()
@@ -133,18 +152,36 @@ do
 end
 
 ---@param bufnr integer
----@param candidates string[]
+---@param complete_candidates string[]
 ---@return fun()
-local function MatchesUpdator(bufnr, candidates)
+local function MatchesUpdator(bufnr, complete_candidates)
   local last_token = ""
+  local last_matches = complete_candidates
   local timer = uv.new_timer()
 
   return function()
     local token = get_query(bufnr)
     if token == last_token then return end
-    last_token = token
 
-    local updator = vim.schedule_wrap(function() buflines.replaces(bufnr, 1, buflines.count(bufnr), fuzzymatch(candidates, token)) end)
+    local candidates
+    if strlib.startswith(token, last_token) then
+      candidates = last_matches
+    else
+      --todo: also optimize for <c-h>/<del>/<c-w>
+      candidates = complete_candidates
+    end
+
+    local updator = vim.schedule_wrap(function()
+      local matches
+      do
+        local start_time = uv.hrtime()
+        matches = fuzzymatch(candidates, token)
+        local elapsed_time = uv.hrtime() - start_time
+        jelly.info("matching against %d items, elapsed %.3fms", #candidates, elapsed_time / 1000000)
+      end
+      last_token, last_matches = token, matches
+      buflines.replaces(bufnr, 1, buflines.count(bufnr), matches)
+    end)
 
     uv.timer_stop(timer)
     uv.timer_start(timer, facts.update_interval, 0, updator)
@@ -182,12 +219,11 @@ return function(candidates, default_query, on_pick)
 
       bm.n("<cr>", function() rhs:pick_cursor("cr") end)
       bm.n("gf", function() rhs:pick_cursor("cr") end)
-      bm.n("i", function() rhs:pick_cursor("cr") end)
-      bm.n("v", function() rhs:pick_cursor("v") end)
-      bm.n("o", function() rhs:pick_cursor("o") end)
-      bm.n("t", function() rhs:pick_cursor("t") end)
-
-      bm.n("<c-g>", function() error("not implemented") end)
+      bm.n("i", function() rhs:pick_cursor_or_passthrough("i") end)
+      bm.n("a", function() rhs:pick_cursor_or_passthrough("a") end)
+      bm.n("v", function() rhs:pick_cursor_or_passthrough("v") end)
+      bm.n("o", function() rhs:pick_cursor_or_passthrough("o") end)
+      bm.n("t", function() rhs:pick_cursor_or_passthrough("t") end)
 
       bm.i("<c-c>", function() rhs:cancel() end)
       bm.i("<c-d>", function() rhs:cancel() end)
@@ -217,4 +253,13 @@ return function(candidates, default_query, on_pick)
   end
 
   feedkeys("ggA", "n")
+
+  if default_query ~= nil and default_query ~= "" then
+    on_first_key(function(key)
+      local code = string.byte(key)
+      if code >= 0x21 and code <= 0x7e then --clear default query
+        api.nvim_buf_set_text(bufnr, 0, 0, 0, #default_query, { "" })
+      end
+    end)
+  end
 end
