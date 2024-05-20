@@ -6,9 +6,10 @@ local fs = require("infra.fs")
 local jelly = require("infra.jellyfish")("beckon", "debug")
 local prefer = require("infra.prefer")
 local strlib = require("infra.strlib")
+local winsplit = require("infra.winsplit")
 
+local Beckon = require("beckon.Beckon")
 local facts = require("beckon.facts")
-local ui = require("beckon.ui")
 local ropes = require("string.buffer")
 
 local api = vim.api
@@ -48,6 +49,18 @@ do
     return true
   end
 
+  local acts = {}
+  do
+    acts.i = function(bufnr) api.nvim_win_set_buf(0, bufnr) end
+    acts.o = function(bufnr) winsplit("above", bufnr) end
+    acts.v = function(bufnr) winsplit("right", bufnr) end
+    acts.t = function(bufnr) ex.eval("tab sbuffer %d", bufnr) end
+
+    acts.cr = acts.i
+    acts.space = acts.i
+    acts.a = acts.i
+  end
+
   local last_query
 
   function M.buffers()
@@ -65,20 +78,30 @@ do
       if #candidates == 0 then return jelly.info("no other buffers") end
     end
 
-    ui(candidates, last_query, function(query, action, line)
+    Beckon(candidates, last_query, function(query, action, line)
       last_query = query
 
       local _, bufnr = contracts.parse_line(line)
       bufnr = assert(tonumber(bufnr))
 
-      ---todo: honor the action
-      local _ = action
-      api.nvim_win_set_buf(0, bufnr)
+      assert(acts[action])(bufnr)
     end)
   end
 end
 
 do
+  local acts = {}
+  do
+    acts.i = function(bufname) ex("buffer", bufname) end
+    acts.o = function(bufname) winsplit("below", bufname) end
+    acts.v = function(bufname) winsplit("right", bufname) end
+    acts.t = function(bufname) ex("tabedit", bufname) end
+
+    acts.cr = acts.i
+    acts.space = acts.i
+    acts.a = acts.i
+  end
+
   local last_query
 
   function M.args()
@@ -92,13 +115,11 @@ do
       end
     end
 
-    ui(candidates, last_query, function(query, action, line)
+    Beckon(candidates, last_query, function(query, action, line)
       last_query = query
 
-      local arg = contracts.parse_line(line)
-      ---todo: honor the action
-      local _ = action
-      ex.cmd("edit", arg)
+      local bufname = contracts.parse_line(line)
+      assert(acts[action])(bufname)
     end)
   end
 end
@@ -117,28 +138,11 @@ do
   function M.digraphs()
     if candidates == nil then candidates = load_digraphs() end
 
-    ui(candidates, last_query, function(query, _, line)
+    Beckon(candidates, last_query, function(query, _, line)
       last_query = query
 
       local char = assert(fn.split_iter(line, " ")())
       api.nvim_put({ char }, "c", true, false)
-    end)
-  end
-end
-
-do
-  local last_query
-  function M.large()
-    local candidates = fn.tolist(io.lines(
-      --100k
-      -- "/tmp/1000-nvim-fzf/files-760ed46bb93ac0c829b283860464f408"
-      --29M
-      "/tmp/1000-nvim-fzf/files-e70f81e7dc238ca3173826940e6d61c2"
-    ))
-
-    ui(candidates, last_query, function(query, _, line)
-      last_query = query
-      jelly.info("picked: %s", line)
     end)
   end
 end
