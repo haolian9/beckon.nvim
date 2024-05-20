@@ -1,5 +1,6 @@
 local M = {}
 
+local ctx = require("infra.ctx")
 local ex = require("infra.ex")
 local fn = require("infra.fn")
 local fs = require("infra.fs")
@@ -143,6 +144,72 @@ do
 
       local char = assert(fn.split_iter(line, " ")())
       api.nvim_put({ char }, "c", true, false)
+    end)
+  end
+end
+
+do
+  local acts = {}
+  do
+    ---@param side infra.winsplit.Side
+    ---@param src_winid integer
+    ---@param src_bufnr integer
+    local function main(side, src_winid, src_bufnr)
+      local src_view
+      local src_wo = {}
+      ctx.win(src_winid, function() src_view = vim.fn.winsaveview() end)
+      for _, opt in ipairs({ "list" }) do
+        src_wo[opt] = prefer.wo(src_winid, opt)
+      end
+
+      --clone src win
+      winsplit(side, src_bufnr)
+      vim.fn.winrestview(src_view)
+      local winid = api.nvim_get_current_win()
+      for opt, val in pairs(src_wo) do
+        prefer.wo(winid, opt, val)
+      end
+    end
+
+    acts.i = function(winid, bufnr) main("right", winid, bufnr) end
+    acts.o = function(winid, bufnr) main("above", winid, bufnr) end
+    acts.v = function(winid, bufnr) main("right", winid, bufnr) end
+    acts.t = function(_, _) return jelly.warn("unexpected action c-t against beckon.windows") end
+
+    acts.cr = acts.i
+    acts.space = acts.i
+    acts.a = acts.i
+  end
+
+  local last_query
+
+  function M.windows()
+    local candidates = {}
+    do
+      local curtab = api.nvim_get_current_tabpage()
+      local tab_iter = fn.filter(function(tabid) return tabid ~= curtab end, api.nvim_list_tabpages())
+
+      for tabid in tab_iter do
+        local tabnr = api.nvim_tabpage_get_number(tabid)
+        for winid in fn.iter(api.nvim_tabpage_list_wins(tabid)) do
+          local bufnr = api.nvim_win_get_buf(winid)
+          local winnr = api.nvim_win_get_number(winid)
+          local bufname = api.nvim_buf_get_name(bufnr)
+          bufname = bufname == "" and "__" or fs.shorten(bufname)
+
+          table.insert(candidates, contracts.format_line(string.format("%d.%d %s", tabnr, winnr, bufname), winid, bufnr))
+        end
+      end
+    end
+
+    Beckon(candidates, last_query, function(query, action, line)
+      last_query = query
+
+      local _, winid, bufnr = contracts.parse_line(line)
+      winid = assert(tonumber(winid))
+      bufnr = assert(tonumber(bufnr))
+
+      assert(acts[action])(winid, bufnr)
     end)
   end
 end
