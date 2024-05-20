@@ -16,6 +16,10 @@ i need a lightweight fuzzy matching picker in nvim, to replace fzf in **some** u
 * [ ] lsp workspace symbol
 * [ ] ui.select
 
+## todo
+* [ ] performance: incremental matching
+    * althrough Beckon is not supposed to be used for very large dataset at the very first.
+
 ## prerequisites
 * zig 0.11
 * nvim 0.10.*
