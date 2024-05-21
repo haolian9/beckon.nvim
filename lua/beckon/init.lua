@@ -79,7 +79,7 @@ do
       if #candidates == 0 then return jelly.info("no other buffers") end
     end
 
-    Beckon(candidates, last_query, function(query, action, line)
+    Beckon("buffers", candidates, last_query, function(query, action, line)
       last_query = query
 
       local _, bufnr = contracts.parse_line(line)
@@ -116,7 +116,7 @@ do
       end
     end
 
-    Beckon(candidates, last_query, function(query, action, line)
+    Beckon("args", candidates, last_query, function(query, action, line)
       last_query = query
 
       local bufname = contracts.parse_line(line)
@@ -139,7 +139,7 @@ do
   function M.digraphs()
     if candidates == nil then candidates = load_digraphs() end
 
-    Beckon(candidates, last_query, function(query, _, line)
+    Beckon("digraphs", candidates, last_query, function(query, _, line)
       last_query = query
 
       local char = assert(fn.split_iter(line, " ")())
@@ -202,7 +202,7 @@ do
       end
     end
 
-    Beckon(candidates, last_query, function(query, action, line)
+    Beckon("windows", candidates, last_query, function(query, action, line)
       last_query = query
 
       local _, winid, bufnr = contracts.parse_line(line)

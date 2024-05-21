@@ -218,13 +218,14 @@ do
   end)
 end
 
+---@param purpose string @used for bufname, win title
 ---@param candidates string[]
 ---@param default_query? string
 ---@param on_pick beckon.OnPick
-return function(candidates, default_query, on_pick)
+return function(purpose, candidates, default_query, on_pick)
   local bufnr
   do
-    bufnr = Ephemeral({ modifiable = true, handyclose = true })
+    bufnr = Ephemeral({ modifiable = true, handyclose = true, namepat = string.format("beckon://%s/{bufnr}", purpose) })
 
     do
       local query, matches
@@ -277,7 +278,7 @@ return function(candidates, default_query, on_pick)
 
   local winid
   do
-    local winopts = dictlib.merged({ relative = "win", border = "single", zindex = 250 }, resolve_geometry())
+    local winopts = dictlib.merged({ relative = "win", border = "single", zindex = 250, title = string.format("beckon://%s", purpose), title_pos = "center" }, resolve_geometry())
     winid = rifts.open.win(bufnr, true, winopts)
 
     api.nvim_win_set_hl_ns(winid, facts.floatwin_ns)
