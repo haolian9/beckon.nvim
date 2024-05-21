@@ -53,7 +53,7 @@ do
   local acts = {}
   do
     acts.i = function(bufnr) api.nvim_win_set_buf(0, bufnr) end
-    acts.o = function(bufnr) winsplit("above", bufnr) end
+    acts.o = function(bufnr) winsplit("below", bufnr) end
     acts.v = function(bufnr) winsplit("right", bufnr) end
     acts.t = function(bufnr) ex.eval("tab sbuffer %d", bufnr) end
 
@@ -172,7 +172,7 @@ do
     end
 
     acts.i = function(winid, bufnr) main("right", winid, bufnr) end
-    acts.o = function(winid, bufnr) main("above", winid, bufnr) end
+    acts.o = function(winid, bufnr) main("below", winid, bufnr) end
     acts.v = function(winid, bufnr) main("right", winid, bufnr) end
     acts.t = function(_, _) return jelly.warn("unexpected action c-t against beckon.windows") end
 

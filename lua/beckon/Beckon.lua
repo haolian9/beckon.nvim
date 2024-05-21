@@ -266,6 +266,11 @@ return function(purpose, candidates, default_query, on_pick)
 
       bm.i("<c-c>", function() rhs:cancel() end)
       bm.i("<c-d>", function() rhs:cancel() end)
+
+      ---to keep consistent experience with fond
+      bm.i("<esc>", function() rhs:cancel() end)
+      bm.i("<c-[>", function() rhs:cancel() end)
+      bm.i("<c-]>", function() feedkeys("<esc>", "n") end)
     end
 
     do
