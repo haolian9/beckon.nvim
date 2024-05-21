@@ -1,5 +1,7 @@
 an opinionated fuzzy matching picker
 
+https://github.com/haolian9/zongzi/assets/6236829/34283b3a-f9dc-44fc-aaad-5b4fcda2785e
+
 
 ## motivation
 i need a lightweight fuzzy matching picker in nvim to replace fzf in **some specific** usecases
