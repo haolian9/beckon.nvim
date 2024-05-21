@@ -32,6 +32,17 @@ local uv = vim.loop
 ---@alias beckon.Action 'cr'|'space'|'i'|'a'|'v'|'o'|'t'
 ---@alias beckon.OnPick fun(query: string, action: beckon.Action, choice: string)
 
+local signals = {}
+do
+  local aug = augroups.Augroup("beckon")
+
+  ---@param bufnr integer
+  ---@param n integer
+  function signals.matches_updated(bufnr, n) aug:emit("User", { pattern = "beckon:matches_updated", data = { bufnr = bufnr, n = n } }) end
+  ---@param callback fun(args: {data: {bufnr: integer, n: integer}})
+  function signals.on_matches_updated(callback) aug:repeats("User", { pattern = "beckon:matches_updated", callback = callback }) end
+end
+
 --stolen from fond.fzf
 --show prompt at cursor line when possible horizental center
 local function resolve_geometry()
@@ -181,11 +192,30 @@ local function MatchesUpdator(bufnr, complete_candidates)
       end
       last_token, last_matches = token, matches
       buflines.replaces(bufnr, 1, buflines.count(bufnr), matches)
+
+      signals.matches_updated(bufnr, #matches)
     end)
 
     uv.timer_stop(timer)
     uv.timer_start(timer, facts.update_interval, 0, updator)
   end
+end
+
+do
+  local ids = {}
+
+  signals.on_matches_updated(function(args)
+    local bufnr = args.data.bufnr
+    if not api.nvim_buf_is_valid(bufnr) then return end
+
+    if ids[bufnr] ~= nil then api.nvim_buf_del_extmark(bufnr, facts.querysuffix_ns, ids[bufnr]) end
+
+    ids[bufnr] = api.nvim_buf_set_extmark(bufnr, facts.querysuffix_ns, 0, 0, {
+      virt_text_pos = "eol",
+      virt_text = { { string.format("#%d", args.data.n), "Search" } },
+    })
+    --
+  end)
 end
 
 ---@param candidates string[]
@@ -196,12 +226,20 @@ return function(candidates, default_query, on_pick)
   do
     bufnr = Ephemeral({ modifiable = true, handyclose = true })
 
-    if default_query == nil then
-      buflines.replace(bufnr, 0, "")
-      buflines.replaces(bufnr, 1, 1, candidates)
-    else
-      buflines.replace(bufnr, 0, default_query)
-      buflines.replaces(bufnr, 1, 1, fuzzymatch(candidates, default_query))
+    do
+      local query, matches
+      if default_query ~= nil then
+        query = default_query
+        matches = fuzzymatch(candidates, default_query)
+      else
+        query = ""
+        matches = candidates
+      end
+
+      buflines.replace(bufnr, 0, query)
+      buflines.replaces(bufnr, 1, 1, matches)
+
+      signals.matches_updated(bufnr, #matches)
     end
 
     do
@@ -232,15 +270,9 @@ return function(candidates, default_query, on_pick)
     do
       local aug = augroups.BufAugroup(bufnr, true)
       local update_matches = MatchesUpdator(bufnr, candidates)
-
       aug:repeats("TextChangedI", { callback = update_matches })
       aug:repeats("TextChanged", { callback = update_matches })
     end
-
-    api.nvim_buf_set_extmark(bufnr, facts.querysuffix_ns, 0, 0, {
-      virt_text_pos = "eol",
-      virt_text = { { "<", "Search" } },
-    })
   end
 
   local winid
