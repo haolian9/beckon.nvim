@@ -2,7 +2,6 @@ local M = {}
 
 local bufopen = require("infra.bufopen")
 local ctx = require("infra.ctx")
-local ex = require("infra.ex")
 local fs = require("infra.fs")
 local itertools = require("infra.itertools")
 local jelly = require("infra.jellyfish")("beckon", "debug")
@@ -53,10 +52,10 @@ do
 
   local acts = {}
   do
-    acts.i = function(bufnr) api.nvim_win_set_buf(0, bufnr) end
-    acts.o = function(bufnr) winsplit("below", bufnr) end
-    acts.v = function(bufnr) winsplit("right", bufnr) end
-    acts.t = function(bufnr) ex.eval("tab sbuffer %d", bufnr) end
+    acts.i = function(bufnr) bufopen("inplace", bufnr) end
+    acts.o = function(bufnr) bufopen("below", bufnr) end
+    acts.v = function(bufnr) bufopen("right", bufnr) end
+    acts.t = function(bufnr) bufopen("tab", bufnr) end
 
     acts.cr = acts.i
     acts.space = acts.i
