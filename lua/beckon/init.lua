@@ -1,9 +1,10 @@
 local M = {}
 
+local bufopen = require("infra.bufopen")
 local ctx = require("infra.ctx")
 local ex = require("infra.ex")
-local fn = require("infra.fn")
 local fs = require("infra.fs")
+local itertools = require("infra.itertools")
 local jelly = require("infra.jellyfish")("beckon", "debug")
 local prefer = require("infra.prefer")
 local strlib = require("infra.strlib")
@@ -37,7 +38,7 @@ do
     assert(paren_at, line)
     local str = string.sub(line, 1, paren_at - #" (")
     local right = string.sub(line, paren_at + #"(", #line - #")")
-    return str, unpack(fn.split(right, ","))
+    return str, unpack(strlib.splits(right, ","))
   end
 end
 
@@ -67,15 +68,15 @@ do
   function M.buffers()
     local candidates
     do
-      local iter = fn.iter(api.nvim_list_bufs())
+      local iter = itertools.iter(api.nvim_list_bufs())
       local curbufnr = api.nvim_get_current_buf()
-      iter = fn.filter(function(bufnr) return bufnr ~= curbufnr end, iter)
-      iter = fn.filter(is_normal_buf, iter)
-      iter = fn.map(function(bufnr)
+      iter = itertools.filter(function(bufnr) return bufnr ~= curbufnr end, iter)
+      iter = itertools.filter(is_normal_buf, iter)
+      iter = itertools.map(function(bufnr)
         local name = fs.shorten(api.nvim_buf_get_name(bufnr))
         return contracts.format_line(name, bufnr)
       end, iter)
-      candidates = fn.tolist(iter)
+      candidates = itertools.tolist(iter)
       if #candidates == 0 then return jelly.info("no other buffers") end
     end
 
@@ -93,10 +94,10 @@ end
 do
   local acts = {}
   do
-    acts.i = function(bufname) ex("buffer", bufname) end
-    acts.o = function(bufname) winsplit("below", bufname) end
-    acts.v = function(bufname) winsplit("right", bufname) end
-    acts.t = function(bufname) ex("tabedit", bufname) end
+    acts.i = function(bufname) bufopen("inplace", bufname) end
+    acts.o = function(bufname) bufopen("below", bufname) end
+    acts.v = function(bufname) bufopen("right", bufname) end
+    acts.t = function(bufname) bufopen("tab", bufname) end
 
     acts.cr = acts.i
     acts.space = acts.i
@@ -111,7 +112,7 @@ do
       local nargs = vim.fn.argc()
       if nargs == 0 then return jelly.info("empty arglist") end
 
-      for i in fn.range(nargs) do
+      for i in itertools.range(nargs) do
         table.insert(candidates, contracts.format_line(vim.fn.argv(i), i))
       end
     end
@@ -128,7 +129,7 @@ end
 do
   local function load_digraphs()
     local path = fs.joinpath(facts.root, "data/digraphs")
-    return fn.tolist(io.lines(path))
+    return itertools.tolist(io.lines(path))
   end
 
   ---@type string[]|nil
@@ -142,7 +143,7 @@ do
     Beckon("digraphs", candidates, last_query, function(query, _, line)
       last_query = query
 
-      local char = assert(fn.split_iter(line, " ")())
+      local char = assert(strlib.iter_splits(line, " ")())
       api.nvim_put({ char }, "c", true, false)
     end)
   end
@@ -187,11 +188,11 @@ do
     local candidates = {}
     do
       local curtab = api.nvim_get_current_tabpage()
-      local tab_iter = fn.filter(function(tabid) return tabid ~= curtab end, api.nvim_list_tabpages())
+      local tab_iter = itertools.filter(function(tabid) return tabid ~= curtab end, api.nvim_list_tabpages())
 
       for tabid in tab_iter do
         local tabnr = api.nvim_tabpage_get_number(tabid)
-        for winid in fn.iter(api.nvim_tabpage_list_wins(tabid)) do
+        for winid in itertools.iter(api.nvim_tabpage_list_wins(tabid)) do
           local bufnr = api.nvim_win_get_buf(winid)
           local winnr = api.nvim_win_get_number(winid)
           local bufname = api.nvim_buf_get_name(bufnr)
