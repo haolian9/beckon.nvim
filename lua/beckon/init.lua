@@ -6,6 +6,7 @@ local fs = require("infra.fs")
 local itertools = require("infra.itertools")
 local jelly = require("infra.jellyfish")("beckon", "debug")
 local prefer = require("infra.prefer")
+local project = require("infra.project")
 local strlib = require("infra.strlib")
 local winsplit = require("infra.winsplit")
 
@@ -42,24 +43,38 @@ do
 end
 
 do
-  local function is_normal_buf(bufnr)
-    local name = api.nvim_buf_get_name(bufnr)
-    if name == "" then return false end
-    if strlib.find(name, "://") then return false end
-    if prefer.bo(bufnr, "buftype") ~= "" then return false end
+  ---@param bufnr integer
+  ---@return true?
+  local function is_searchable_buf(bufnr)
+    if not prefer.bo(bufnr, "buflisted") then return end
+    if prefer.bo(bufnr, "buftype") ~= "" then return end
+
+    local bufname = api.nvim_buf_get_name(bufnr)
+    if bufname == "" then return end --eg, bufnr=1
+    if strlib.find(bufname, "://") then return end
+
     return true
+  end
+
+  ---@param root string
+  ---@param bufnr integer
+  ---@return string
+  local function resolve_bufname(root, bufnr)
+    local bufname = api.nvim_buf_get_name(bufnr)
+    local relative = fs.relative_path(root, bufname)
+    return relative or bufname
   end
 
   local acts = {}
   do
-    acts.i = function(bufnr) bufopen("inplace", bufnr) end
-    acts.o = function(bufnr) bufopen("below", bufnr) end
-    acts.v = function(bufnr) bufopen("right", bufnr) end
-    acts.t = function(bufnr) bufopen("tab", bufnr) end
+    acts.i = bufopen.inplace
+    acts.o = bufopen.below
+    acts.v = bufopen.right
+    acts.t = bufopen.tab
 
-    acts.cr = acts.i
-    acts.space = acts.i
-    acts.a = acts.i
+    acts.cr = bufopen.inplace
+    acts.space = bufopen.inplace
+    acts.a = bufopen.inplace
   end
 
   local last_query
@@ -67,14 +82,12 @@ do
   function M.buffers()
     local candidates
     do
-      local iter = itertools.iter(api.nvim_list_bufs())
-      local curbufnr = api.nvim_get_current_buf()
-      iter = itertools.filter(function(bufnr) return bufnr ~= curbufnr end, iter)
-      iter = itertools.filter(is_normal_buf, iter)
-      iter = itertools.map(function(bufnr)
-        local name = fs.shorten(api.nvim_buf_get_name(bufnr))
-        return contracts.format_line(name, bufnr)
-      end, iter)
+      local iter
+      iter = itertools.iter(api.nvim_list_bufs())
+      iter = itertools.filter(is_searchable_buf, iter)
+      local root = project.working_root()
+      iter = itertools.map(function(bufnr) return contracts.format_line(resolve_bufname(root, bufnr), bufnr) end, iter)
+
       candidates = itertools.tolist(iter)
       if #candidates == 0 then return jelly.info("no other buffers") end
     end
@@ -93,14 +106,14 @@ end
 do
   local acts = {}
   do
-    acts.i = function(bufname) bufopen("inplace", bufname) end
-    acts.o = function(bufname) bufopen("below", bufname) end
-    acts.v = function(bufname) bufopen("right", bufname) end
-    acts.t = function(bufname) bufopen("tab", bufname) end
+    acts.i = bufopen.inplace
+    acts.o = bufopen.below
+    acts.v = bufopen.right
+    acts.t = bufopen.tab
 
-    acts.cr = acts.i
-    acts.space = acts.i
-    acts.a = acts.i
+    acts.cr = bufopen.inplace
+    acts.space = bufopen.inplace
+    acts.a = bufopen.inplace
   end
 
   local last_query
