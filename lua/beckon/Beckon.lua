@@ -202,19 +202,18 @@ local function MatchesUpdator(bufnr, complete_candidates)
 end
 
 do
-  local ids = {}
+  ---@type {[integer]: integer}
+  local extmarks = {}
 
   signals.on_matches_updated(function(args)
     local bufnr = args.data.bufnr
     if not api.nvim_buf_is_valid(bufnr) then return end
 
-    if ids[bufnr] ~= nil then api.nvim_buf_del_extmark(bufnr, facts.querysuffix_ns, ids[bufnr]) end
-
-    ids[bufnr] = api.nvim_buf_set_extmark(bufnr, facts.querysuffix_ns, 0, 0, {
+    if extmarks[bufnr] ~= nil then api.nvim_buf_del_extmark(bufnr, facts.queryextmark_ns, extmarks[bufnr]) end
+    extmarks[bufnr] = api.nvim_buf_set_extmark(bufnr, facts.queryextmark_ns, 0, 0, {
       virt_text_pos = "eol",
-      virt_text = { { string.format("#%d", args.data.n), "Search" } },
+      virt_text = { { string.format("#%d", args.data.n), "Comment" } },
     })
-    --
   end)
 end
 

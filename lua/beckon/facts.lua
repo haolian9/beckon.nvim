@@ -27,7 +27,7 @@ do
   M.floatwin_ns = ns
 end
 
-M.querysuffix_ns = api.nvim_create_namespace("beckon:querysuffix")
+M.queryextmark_ns = api.nvim_create_namespace("beckon:extmark:query")
 
 M.onkey_ns = api.nvim_create_namespace("beckon:onkey")
 

@@ -5,6 +5,7 @@ local ctx = require("infra.ctx")
 local fs = require("infra.fs")
 local itertools = require("infra.itertools")
 local jelly = require("infra.jellyfish")("beckon", "debug")
+local listlib = require("infra.listlib")
 local prefer = require("infra.prefer")
 local project = require("infra.project")
 local strlib = require("infra.strlib")
@@ -46,6 +47,7 @@ do
   ---@param bufnr integer
   ---@return true?
   local function is_searchable_buf(bufnr)
+    if vim.fn.bufloaded(bufnr) == 0 then return end
     if not prefer.bo(bufnr, "buflisted") then return end
     if prefer.bo(bufnr, "buftype") ~= "" then return end
 
@@ -82,11 +84,18 @@ do
   function M.buffers()
     local candidates
     do
+      local bufnrs = api.nvim_list_bufs()
+      if #bufnrs == 1 then return jelly.info("no other buffers") end
+
       local iter
-      iter = itertools.iter(api.nvim_list_bufs())
+      iter = itertools.iter(bufnrs)
+      local curbufnr = api.nvim_get_current_buf()
+      iter = itertools.filter(function(bufnr) return bufnr ~= curbufnr end, iter)
       iter = itertools.filter(is_searchable_buf, iter)
       local root = project.working_root()
       iter = itertools.map(function(bufnr) return contracts.format_line(resolve_bufname(root, bufnr), bufnr) end, iter)
+
+      --todo: sort by using frequency
 
       candidates = itertools.tolist(iter)
       if #candidates == 0 then return jelly.info("no other buffers") end
@@ -104,6 +113,11 @@ do
 end
 
 do
+  ---@param root string
+  ---@param arg string
+  ---@return string
+  local function resolve_argname(root, arg) return fs.relative_path(root, arg) or arg end
+
   local acts = {}
   do
     acts.i = bufopen.inplace
@@ -121,19 +135,25 @@ do
   function M.args()
     local candidates = {}
     do --no matter it's global or win-local
-      local nargs = vim.fn.argc()
-      if nargs == 0 then return jelly.info("empty arglist") end
+      local args = vim.fn.argv(-1)
+      assert(type(args) == "table")
+      if #args == 0 then return jelly.info("empty arglist") end
 
-      for i in itertools.range(nargs) do
-        table.insert(candidates, contracts.format_line(vim.fn.argv(i), i))
-      end
+      local iter
+      iter = listlib.enumerate(args)
+      local root = project.working_root()
+      iter = itertools.mapn(function(i, arg) return contracts.format_line(resolve_argname(root, arg), i) end, iter)
+      candidates = itertools.tolist(iter)
     end
 
     Beckon("args", candidates, last_query, function(query, action, line)
       last_query = query
 
-      local bufname = contracts.parse_line(line)
-      assert(acts[action])(bufname)
+      local _, i = contracts.parse_line(line)
+      i = assert(tonumber(i))
+      local arg = vim.fn.argv(i)
+
+      assert(acts[action])(arg)
     end)
   end
 end
@@ -153,6 +173,30 @@ do
     if candidates == nil then candidates = load_digraphs() end
 
     Beckon("digraphs", candidates, last_query, function(query, _, line)
+      last_query = query
+
+      local char = assert(strlib.iter_splits(line, " ")())
+      api.nvim_put({ char }, "c", true, false)
+    end)
+  end
+end
+
+do
+  ---the emojis data comes from: https://github.com/Allaman/emoji.nvim
+  local function load_emojis()
+    local path = fs.joinpath(facts.root, "data/emojis")
+    return itertools.tolist(io.lines(path))
+  end
+
+  ---@type string[]|nil
+  local candidates
+
+  local last_query
+
+  function M.emojis()
+    if candidates == nil then candidates = load_emojis() end
+
+    Beckon("emojis", candidates, last_query, function(query, _, line)
       last_query = query
 
       local char = assert(strlib.iter_splits(line, " ")())
