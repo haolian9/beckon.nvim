@@ -89,8 +89,6 @@ do
 
       local iter
       iter = itertools.iter(bufnrs)
-      local curbufnr = api.nvim_get_current_buf()
-      iter = itertools.filter(function(bufnr) return bufnr ~= curbufnr end, iter)
       iter = itertools.filter(is_searchable_buf, iter)
       local root = project.working_root()
       iter = itertools.map(function(bufnr) return contracts.format_line(resolve_bufname(root, bufnr), bufnr) end, iter)

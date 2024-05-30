@@ -237,8 +237,8 @@ return function(purpose, candidates, on_pick, opts)
     do
       local query, matches
       if opts.default_query ~= nil then
-        query = opts.default_query
-        matches = fuzzymatch(candidates, opts.default_query)
+        query = assert(opts.default_query)
+        matches = fuzzymatch(candidates, query, opts.strict_path)
       else
         query = ""
         matches = candidates
