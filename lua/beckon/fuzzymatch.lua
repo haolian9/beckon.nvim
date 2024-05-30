@@ -26,15 +26,16 @@ end
 
 ---@param candidates string[]
 ---@param token string
+---@param strict_path boolean
 ---@return string[]
-return function(candidates, token)
-  assert(token ~= nil)
+return function(candidates, token, strict_path)
+  assert(token ~= nil and strict_path ~= nil)
   if token == "" then return candidates end
 
   ---@type {[1]: integer, [2]: integer}[] @[(index, rank)]
   local ranks = {}
   for i, file in ipairs(candidates) do
-    local rank = rank_token(file, nil, token, false, false)
+    local rank = rank_token(file, nil, token, false, strict_path)
     if rank ~= -1 then table.insert(ranks, { i, rank }) end
   end
   if #ranks == 0 then return {} end

@@ -64,7 +64,7 @@ do
   local function resolve_bufname(root, bufnr)
     local bufname = api.nvim_buf_get_name(bufnr)
     local relative = fs.relative_path(root, bufname)
-    return relative or bufname
+    return fs.shorten(relative or bufname)
   end
 
   local acts = {}
@@ -101,14 +101,14 @@ do
       if #candidates == 0 then return jelly.info("no other buffers") end
     end
 
-    Beckon("buffers", candidates, last_query, function(query, action, line)
+    Beckon("buffers", candidates, function(query, action, line)
       last_query = query
 
       local _, bufnr = contracts.parse_line(line)
       bufnr = assert(tonumber(bufnr))
 
       assert(acts[action])(bufnr)
-    end)
+    end, { default_query = last_query, strict_path = true })
   end
 end
 
@@ -116,7 +116,7 @@ do
   ---@param root string
   ---@param arg string
   ---@return string
-  local function resolve_argname(root, arg) return fs.relative_path(root, arg) or arg end
+  local function resolve_argname(root, arg) return fs.shorten(fs.relative_path(root, arg) or arg) or arg end
 
   local acts = {}
   do
@@ -146,7 +146,7 @@ do
       candidates = itertools.tolist(iter)
     end
 
-    Beckon("args", candidates, last_query, function(query, action, line)
+    Beckon("args", candidates, function(query, action, line)
       last_query = query
 
       local _, i = contracts.parse_line(line)
@@ -154,30 +154,31 @@ do
       local arg = vim.fn.argv(i)
 
       assert(acts[action])(arg)
-    end)
+    end, { default_query = last_query })
   end
 end
 
 do
   local function load_digraphs()
     local path = fs.joinpath(facts.root, "data/digraphs")
-    return itertools.tolist(io.lines(path))
+    local list = itertools.tolist(io.lines(path))
+    return setmetatable(list, { __mode = "v" })
   end
 
-  ---@type string[]|nil
-  local candidates
+  ---@type string[]
+  local candidates = {}
 
   local last_query
 
   function M.digraphs()
-    if candidates == nil then candidates = load_digraphs() end
+    if #candidates == 0 then candidates = load_digraphs() end
 
-    Beckon("digraphs", candidates, last_query, function(query, _, line)
+    Beckon("digraphs", candidates, function(query, _, line)
       last_query = query
 
       local char = assert(strlib.iter_splits(line, " ")())
       api.nvim_put({ char }, "c", true, false)
-    end)
+    end, { default_query = last_query })
   end
 end
 
@@ -185,23 +186,24 @@ do
   ---the emojis data comes from: https://github.com/Allaman/emoji.nvim
   local function load_emojis()
     local path = fs.joinpath(facts.root, "data/emojis")
-    return itertools.tolist(io.lines(path))
+    local list = itertools.tolist(io.lines(path))
+    return setmetatable(list, { __mode = "v" })
   end
 
-  ---@type string[]|nil
-  local candidates
+  ---@type string[]
+  local candidates = {}
 
   local last_query
 
   function M.emojis()
-    if candidates == nil then candidates = load_emojis() end
+    if #candidates == 0 then candidates = load_emojis() end
 
-    Beckon("emojis", candidates, last_query, function(query, _, line)
+    Beckon("emojis", candidates, function(query, _, line)
       last_query = query
 
       local char = assert(strlib.iter_splits(line, " ")())
       api.nvim_put({ char }, "c", true, false)
-    end)
+    end, { default_query = last_query })
   end
 end
 
@@ -259,7 +261,7 @@ do
       end
     end
 
-    Beckon("windows", candidates, last_query, function(query, action, line)
+    Beckon("windows", candidates, function(query, action, line)
       last_query = query
 
       local _, winid, bufnr = contracts.parse_line(line)
@@ -267,7 +269,7 @@ do
       bufnr = assert(tonumber(bufnr))
 
       assert(acts[action])(winid, bufnr)
-    end)
+    end, { default_query = last_query })
   end
 end
 

@@ -163,11 +163,12 @@ do
 end
 
 ---@param bufnr integer
----@param complete_candidates string[]
+---@param all_candidates string[]
+---@param strict_path boolean
 ---@return fun()
-local function MatchesUpdator(bufnr, complete_candidates)
+local function MatchesUpdator(bufnr, all_candidates, strict_path)
   local last_token = ""
-  local last_matches = complete_candidates
+  local last_matches = all_candidates
   local timer = uv.new_timer()
 
   return function()
@@ -179,14 +180,14 @@ local function MatchesUpdator(bufnr, complete_candidates)
       candidates = last_matches
     else
       --todo: also optimize for <c-h>/<del>/<c-w>
-      candidates = complete_candidates
+      candidates = all_candidates
     end
 
     local updator = vim.schedule_wrap(function()
       local matches
       do
         local start_time = uv.hrtime()
-        matches = fuzzymatch(candidates, token)
+        matches = fuzzymatch(candidates, token, strict_path)
         local elapsed_time = uv.hrtime() - start_time
         jelly.info("matching against %d items, elapsed %.3fms", #candidates, elapsed_time / 1000000)
       end
@@ -217,20 +218,27 @@ do
   end)
 end
 
+---@class beckon.BeckonOpts
+---@field default_query? string
+---@field strict_path? boolean @nil=false
+
 ---@param purpose string @used for bufname, win title
 ---@param candidates string[]
----@param default_query? string
 ---@param on_pick beckon.OnPick
-return function(purpose, candidates, default_query, on_pick)
+---@param opts? beckon.BeckonOpts
+return function(purpose, candidates, on_pick, opts)
+  opts = opts or {}
+  if opts.strict_path == nil then opts.strict_path = false end
+
   local bufnr
   do
     bufnr = Ephemeral({ modifiable = true, handyclose = true, namepat = string.format("beckon://%s/{bufnr}", purpose) })
 
     do
       local query, matches
-      if default_query ~= nil then
-        query = default_query
-        matches = fuzzymatch(candidates, default_query)
+      if opts.default_query ~= nil then
+        query = opts.default_query
+        matches = fuzzymatch(candidates, opts.default_query)
       else
         query = ""
         matches = candidates
@@ -274,7 +282,7 @@ return function(purpose, candidates, default_query, on_pick)
 
     do
       local aug = augroups.BufAugroup(bufnr, true)
-      local update_matches = MatchesUpdator(bufnr, candidates)
+      local update_matches = MatchesUpdator(bufnr, candidates, opts.strict_path)
       aug:repeats("TextChangedI", { callback = update_matches })
       aug:repeats("TextChanged", { callback = update_matches })
     end
@@ -291,11 +299,11 @@ return function(purpose, candidates, default_query, on_pick)
 
   feedkeys("ggA", "n")
 
-  if default_query ~= nil and default_query ~= "" then
+  if opts.default_query ~= nil and opts.default_query ~= "" then
     on_first_key(function(key)
       local code = string.byte(key)
       if code >= 0x21 and code <= 0x7e then --clear default query
-        api.nvim_buf_set_text(bufnr, 0, 0, 0, #default_query, { "" })
+        api.nvim_buf_set_text(bufnr, 0, 0, 0, #opts.default_query, { "" })
       end
     end)
   end
