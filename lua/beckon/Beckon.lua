@@ -27,7 +27,7 @@ local facts = require("beckon.facts")
 local fuzzymatch = require("beckon.fuzzymatch")
 
 local api = vim.api
-local uv = vim.loop
+local uv = vim.uv
 
 ---@alias beckon.Action 'cr'|'space'|'i'|'a'|'v'|'o'|'t'
 ---@alias beckon.OnPick fun(query: string, action: beckon.Action, choice: string)
