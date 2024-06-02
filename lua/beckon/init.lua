@@ -47,12 +47,14 @@ do
   ---@param bufnr integer
   ---@return true?
   local function is_searchable_buf(bufnr)
-    if vim.fn.bufloaded(bufnr) == 0 then return end
-    if not prefer.bo(bufnr, "buflisted") then return end
+    --no matter if it's
+    --* not listed: <c-o>/jumplist
+    --* not loaded
+    --* unnamed: enew, #1
+
     if prefer.bo(bufnr, "buftype") ~= "" then return end
 
     local bufname = api.nvim_buf_get_name(bufnr)
-    if bufname == "" then return end --eg, bufnr=1
     if strlib.find(bufname, "://") then return end
 
     return true
@@ -63,6 +65,7 @@ do
   ---@return string
   local function resolve_bufname(root, bufnr)
     local bufname = api.nvim_buf_get_name(bufnr)
+    if bufname == "" then return "__" end
     local relative = fs.relative_path(root, bufname)
     return fs.shorten(relative or bufname)
   end
@@ -268,6 +271,18 @@ do
 
       assert(acts[action])(winid, bufnr)
     end, { default_query = last_query })
+  end
+end
+
+do --the same as puff.select
+  ---@param entries string[]
+  ---@param opts {prompt: string?, format_item: fun(entry: string): (string), kind: string?}
+  ---@param callback fun(entry: string?, index: number?)
+  function M.select(entries, opts, callback)
+    Beckon("select", entries, function(_, _, line)
+      --
+    end)
+    --
   end
 end
 

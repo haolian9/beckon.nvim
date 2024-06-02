@@ -4,7 +4,6 @@
 ---* one buffer and one window
 ---* the first line is for user input
 ---* the rest lines are matched results
----* no inline extmark as the prompt, which is buggy in my test
 ---* no i_c-n and i_c-p
 ---* no i_c-u and i_c-d
 ---* no fzf --nth
@@ -43,12 +42,9 @@ do
   function signals.on_matches_updated(callback) aug:repeats("User", { pattern = "beckon:matches_updated", callback = callback }) end
 end
 
---stolen from fond.fzf
---show prompt at cursor line when possible horizental center
-local function resolve_geometry()
-  local winid = api.nvim_get_current_win()
-
-  local winfo = assert(vim.fn.getwininfo(winid)[1])
+---@param host_winid integer
+local function resolve_geometry(host_winid)
+  local winfo = assert(vim.fn.getwininfo(host_winid)[1])
   local win_width, win_height = winfo.width, winfo.height
   -- takes folding into account
   local win_row = vim.fn.winline()
@@ -72,7 +68,7 @@ local function resolve_geometry()
   local height, row
   if win_height > 15 then
     height = math.floor(win_height * 0.45)
-    row = math.max(win_row - height - 1, 0)
+    row = math.max(win_row - 1, 0)
   else
     height = win_height - 2 -- borders
     row = 0
@@ -187,7 +183,7 @@ local function MatchesUpdator(bufnr, all_candidates, strict_path)
       local matches
       do
         local start_time = uv.hrtime()
-        matches = fuzzymatch(candidates, token, strict_path)
+        matches = fuzzymatch(candidates, token, { strict_path = strict_path })
         local elapsed_time = uv.hrtime() - start_time
         jelly.info("matching against %d items, elapsed %.3fms", #candidates, elapsed_time / 1000000)
       end
@@ -238,7 +234,7 @@ return function(purpose, candidates, on_pick, opts)
       local query, matches
       if opts.default_query ~= nil then
         query = assert(opts.default_query)
-        matches = fuzzymatch(candidates, query, opts.strict_path)
+        matches = fuzzymatch(candidates, query, { strict_path = opts.strict_path })
       else
         query = ""
         matches = candidates
@@ -290,7 +286,10 @@ return function(purpose, candidates, on_pick, opts)
 
   local winid
   do
-    local winopts = dictlib.merged({ relative = "win", border = "single", zindex = 250, title = string.format("beckon://%s", purpose), title_pos = "center" }, resolve_geometry())
+    local winopts = { relative = "win", border = "single", zindex = 250, title = string.format("beckon://%s", purpose), title_pos = "center" }
+    local host_winid = api.nvim_get_current_win()
+    dictlib.merge(winopts, resolve_geometry(host_winid))
+
     winid = rifts.open.win(bufnr, true, winopts)
 
     api.nvim_win_set_hl_ns(winid, facts.floatwin_ns)

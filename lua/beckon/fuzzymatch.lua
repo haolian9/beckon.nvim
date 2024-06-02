@@ -24,24 +24,54 @@ local function rank_token(str, filename, token, case_sensitive, strict_path)
   return assert(tonumber(rank))
 end
 
----@param candidates string[]
+---@class beckon.fuzzymatch.Opts
+---@field strict_path? boolean @nil=false
+---@field sort? 'asc'|'desc'|false @nil='asc'
+---@field tostr? fun(candidate:any): string
+
+local function compare_descent(a, b) return a[2] > b[2] end
+local function compare_ascent(a, b) return a[2] < b[2] end
+
+---@param opts? beckon.fuzzymatch.Opts
+---@return beckon.fuzzymatch.Opts
+local function normalize_opts(opts)
+  if opts == nil then return { strict_path = false, sort = false, tostr = nil } end
+  if opts.strict_path == nil then opts.strict_path = false end
+  if opts.sort == nil then opts.sort = "asc" end
+  if opts.tostr == nil then opts.tostr = function(str) return str end end
+  return opts
+end
+
+---defaults
+---* no case sensitive
+---* no strict path
+---* results in ascent order
+---@generic T
+---@param candidates T[]
 ---@param token string
----@param strict_path boolean
----@return string[]
-return function(candidates, token, strict_path)
-  assert(token ~= nil and strict_path ~= nil)
+---@param opts? beckon.fuzzymatch.Opts
+---@return T[]
+return function(candidates, token, opts)
+  assert(token ~= nil)
   if token == "" then return candidates end
+
+  opts = normalize_opts(opts)
 
   ---@type {[1]: integer, [2]: integer}[] @[(index, rank)]
   local ranks = {}
-  for i, file in ipairs(candidates) do
-    local rank = rank_token(file, nil, token, false, strict_path)
+  for i, cand in ipairs(candidates) do
+    local rank = rank_token(opts.tostr(cand), nil, token, false, opts.strict_path)
     if rank ~= -1 then table.insert(ranks, { i, rank }) end
   end
   if #ranks == 0 then return {} end
 
-  ---rank high->low
-  table.sort(ranks, function(a, b) return a[2] < b[2] end)
+  if opts.sort == "asc" then
+    table.sort(ranks, compare_ascent)
+  elseif opts.sort == "desc" then
+    table.sort(ranks, compare_descent)
+  else
+    ---no sort
+  end
 
   local matches = {}
   for _, tuple in ipairs(ranks) do
