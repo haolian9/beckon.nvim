@@ -10,6 +10,7 @@ i need a lightweight fuzzy matching picker in nvim to replace fzf in **some spec
 * no cache for dataset
     * for large datasets (say 1 million), consider using fzf
     * may suffer the limits of nvim buffer: memory consumption, highlight, undo history, and something i dont know yet
+        * note: the undo history of beckon buffers are disabled
 * no fancy UI
 * no seperated windows for user input and matched result
     * and unexpected user operations to buffers may cause troubles likely
@@ -23,6 +24,7 @@ i need a lightweight fuzzy matching picker in nvim to replace fzf in **some spec
 * since it's a buffer, you can:
     * have vim modes
     * use motion plugins
+* an impl of vim.ui.select
 
 ## status
 * just works
@@ -30,16 +32,17 @@ i need a lightweight fuzzy matching picker in nvim to replace fzf in **some spec
 * speed, performance: i have not put too much efforts on it
 
 ## todo
-* [ ] to replace ui.select
 * [ ] highlight token
+* [ ] reduce lines showed in the buffer, based on the scope of view
 
 ## sources
 * [x] buffers
 * [x] arglist
 * [x] digraphs
+* [x] emojis
 * [x] windows
 * [ ] lsp document symbol
-* [ ] lsp workspace symbol
+* ~~[ ] lsp workspace symbol~~
 
 ## prerequisites
 * zig 0.12
