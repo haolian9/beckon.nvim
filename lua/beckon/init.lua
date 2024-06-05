@@ -274,16 +274,4 @@ do
   end
 end
 
-do --the same as puff.select
-  ---@param entries string[]
-  ---@param opts {prompt: string?, format_item: fun(entry: string): (string), kind: string?}
-  ---@param callback fun(entry: string?, index: number?)
-  function M.select(entries, opts, callback)
-    Beckon("select", entries, function(_, _, line)
-      --
-    end)
-    --
-  end
-end
-
 return M

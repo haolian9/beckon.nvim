@@ -57,7 +57,7 @@ return function(candidates, token, opts)
 
   opts = normalize_opts(opts)
 
-  ---@type {[1]: integer, [2]: integer}[] @[(index, rank)]
+  ---@type [integer,integer][] @[(index, rank)]
   local ranks = {}
   for i, cand in ipairs(candidates) do
     local rank = rank_token(opts.tostr(cand), nil, token, false, opts.strict_path)
