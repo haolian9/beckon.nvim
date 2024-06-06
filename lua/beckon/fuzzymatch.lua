@@ -35,7 +35,7 @@ local function compare_ascent(a, b) return a[2] < b[2] end
 ---@param opts? beckon.fuzzymatch.Opts
 ---@return beckon.fuzzymatch.Opts
 local function normalize_opts(opts)
-  if opts == nil then return { strict_path = false, sort = false, tostr = nil } end
+  if opts == nil then opts = {} end
   if opts.strict_path == nil then opts.strict_path = false end
   if opts.sort == nil then opts.sort = "asc" end
   if opts.tostr == nil then opts.tostr = function(str) return str end end
@@ -57,11 +57,19 @@ return function(candidates, token, opts)
 
   opts = normalize_opts(opts)
 
-  ---@type [integer,integer][] @[(index, rank)]
-  local ranks = {}
-  for i, cand in ipairs(candidates) do
+  if opts.sort == false then --shortcut
+    local matches = {}
+    for _, cand in ipairs(candidates) do
+      local rank = rank_token(opts.tostr(cand), nil, token, false, opts.strict_path)
+      if rank ~= -1 then table.insert(matches, cand) end
+    end
+    return matches
+  end
+
+  local ranks = {} ---@type [any,integer][] @[(candidate, rank)]
+  for _, cand in ipairs(candidates) do
     local rank = rank_token(opts.tostr(cand), nil, token, false, opts.strict_path)
-    if rank ~= -1 then table.insert(ranks, { i, rank }) end
+    if rank ~= -1 then table.insert(ranks, { cand, rank }) end
   end
   if #ranks == 0 then return {} end
 
@@ -70,12 +78,12 @@ return function(candidates, token, opts)
   elseif opts.sort == "desc" then
     table.sort(ranks, compare_descent)
   else
-    ---no sort
+    error("unreachable")
   end
 
   local matches = {}
   for _, tuple in ipairs(ranks) do
-    table.insert(matches, candidates[tuple[1]])
+    table.insert(matches, tuple[1])
   end
 
   return matches
