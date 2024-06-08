@@ -35,8 +35,8 @@ end
 
 ---CAUTION: callback wont be called when user cancels (due to Beckon current impl)
 ---@param entries string[]
----@param opts {prompt: string?, format_item: fun(entry:string):string, kind: string?}
----@param callback fun(entry: string?, index: number?) @index: 1-based
+---@param opts {prompt:string?, format_item:fun(entry:string):string, kind:string?, open_win:beckon.OpenWin?}
+---@param callback fun(entry: string?, index: number?, action: beckon.Action) @index: 1-based
 return function(entries, opts, callback)
   ---@type string[] @pattern="{entry} (index)"
   local candidates
@@ -52,12 +52,12 @@ return function(entries, opts, callback)
     candidates = itertools.tolist(iter)
   end
 
-  local _, bufnr = Beckon("select", candidates, function(_, _, line)
+  local _, bufnr = Beckon("select", candidates, function(_, action, line)
     local index = assert(string.match(line, "%((%d+)%)$"))
     index = assert(tonumber(index))
     local entry = assert(entries[index])
-    callback(entry, index)
-  end, { open_win = open_win })
+    callback(entry, index, action)
+  end, { open_win = opts.open_win or open_win })
 
   if opts.prompt ~= nil then --inline extmark as prompt
     api.nvim_buf_set_extmark(bufnr, facts.queryextmark_ns, 0, 0, {

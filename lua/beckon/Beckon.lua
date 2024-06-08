@@ -302,10 +302,12 @@ do --main
     end)
   end
 
+  ---@alias beckon.OpenWin fun(purpose: string, bufnr: integer):winid:integer
+
   ---@class beckon.BeckonOpts
   ---@field default_query? string
   ---@field strict_path? boolean @nil=false
-  ---@field open_win? fun(purpose: string, bufnr: integer):winid:integer
+  ---@field open_win? beckon.OpenWin
 
   ---@param purpose string @used for bufname, win title
   ---@param candidates string[]
