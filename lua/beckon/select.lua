@@ -1,5 +1,6 @@
 local buflines = require("infra.buflines")
 local itertools = require("infra.itertools")
+local its = require("infra.its")
 local listlib = require("infra.listlib")
 local rifts = require("infra.rifts")
 local unsafe = require("infra.unsafe")
@@ -33,24 +34,23 @@ local function open_win(purpose, bufnr)
   return winid
 end
 
+---@class beckon.select.Opts
+---@field prompt? string
+---@field format_item? fun(item:string):string
+---@field kind? string
+---@field open_win? beckon.OpenWin
+
 ---CAUTION: callback wont be called when user cancels (due to Beckon current impl)
 ---@param entries string[]
----@param opts {prompt:string?, format_item:fun(entry:string):string, kind:string?, open_win:beckon.OpenWin?}
+---@param opts beckon.select.Opts
 ---@param callback fun(entry: string?, index: number?, action: beckon.Action) @index: 1-based
 return function(entries, opts, callback)
-  ---@type string[] @pattern="{entry} (index)"
-  local candidates
-  do
-    local iter
-    iter = listlib.enumerate1(entries)
-    if opts.format_item then
-      iter = itertools.mapn(function(i, ent) return string.format("%s (%d)", opts.format_item(ent), i) end, iter)
-    else
-      iter = itertools.mapn(function(i, ent) return string.format("%s (%d)", ent, i) end, iter)
-    end
+  if opts.format_item == nil then opts.format_item = function(s) return s end end
 
-    candidates = itertools.tolist(iter)
-  end
+  ---@type string[] @pattern="{entry} (index)"
+  local candidates = its(listlib.enumerate1(entries)) --
+    :mapn(function(i, ent) return string.format("%s (%d)", opts.format_item(ent), i) end)
+    :tolist()
 
   local _, bufnr = Beckon("select", candidates, function(_, action, line)
     local index = assert(string.match(line, "%((%d+)%)$"))

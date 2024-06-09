@@ -4,6 +4,7 @@ local bufopen = require("infra.bufopen")
 local ctx = require("infra.ctx")
 local fs = require("infra.fs")
 local itertools = require("infra.itertools")
+local its = require("infra.its")
 local jelly = require("infra.jellyfish")("beckon", "debug")
 local listlib = require("infra.listlib")
 local prefer = require("infra.prefer")
@@ -85,20 +86,19 @@ do
   local last_query
 
   function M.buffers()
+    ---@type string[]
     local candidates
     do
       local bufnrs = api.nvim_list_bufs()
       if #bufnrs == 1 then return jelly.info("no other buffers") end
 
-      local iter
-      iter = itertools.iter(bufnrs)
-      iter = itertools.filter(is_searchable_buf, iter)
       local root = project.working_root()
-      iter = itertools.map(function(bufnr) return contracts.format_line(resolve_bufname(root, bufnr), bufnr) end, iter)
-
       --todo: sort by using frequency
+      candidates = its(bufnrs) --
+        :filter(is_searchable_buf)
+        :map(function(bufnr) return contracts.format_line(resolve_bufname(root, bufnr), bufnr) end)
+        :tolist()
 
-      candidates = itertools.tolist(iter)
       if #candidates == 0 then return jelly.info("no other buffers") end
     end
 
@@ -134,17 +134,18 @@ do
   local last_query
 
   function M.args()
-    local candidates = {}
+    ---@type string[]
+    local candidates
     do --no matter it's global or win-local
       local args = vim.fn.argv(-1)
       assert(type(args) == "table")
       if #args == 0 then return jelly.info("empty arglist") end
 
-      local iter
-      iter = listlib.enumerate(args)
       local root = project.working_root()
-      iter = itertools.mapn(function(i, arg) return contracts.format_line(resolve_argname(root, arg), i) end, iter)
-      candidates = itertools.tolist(iter)
+
+      candidates = its(listlib.enumerate(args)) --
+        :mapn(function(i, arg) return contracts.format_line(resolve_argname(root, arg), i) end)
+        :tolist()
     end
 
     Beckon("args", candidates, function(query, action, line)
