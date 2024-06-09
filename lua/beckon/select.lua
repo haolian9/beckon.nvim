@@ -60,7 +60,7 @@ return function(entries, opts, callback)
   end, { open_win = opts.open_win or open_win })
 
   if opts.prompt ~= nil then --inline extmark as prompt
-    api.nvim_buf_set_extmark(bufnr, facts.queryextmark_ns, 0, 0, {
+    api.nvim_buf_set_extmark(bufnr, facts.xm_querry_ns, 0, 0, {
       virt_text = { { opts.prompt, "Question" }, { " " } },
       virt_text_pos = "inline",
       right_gravity = false,

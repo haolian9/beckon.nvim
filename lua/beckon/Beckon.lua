@@ -7,6 +7,7 @@
 ---* no i_c-n and i_c-p
 ---* no i_c-u and i_c-d
 ---* no fzf --nth
+---* focus line: cycle in visible match lines, reset to 0 when matches updated
 ---
 ---todo: highlight tokens
 
@@ -36,10 +37,16 @@ do
   local aug = augroups.Augroup("beckon")
 
   ---@param bufnr integer
-  ---@param n integer
+  ---@param n integer @number of matches
   function signals.matches_updated(bufnr, n) aug:emit("User", { pattern = "beckon:matches_updated", data = { bufnr = bufnr, n = n } }) end
   ---@param callback fun(args: {data: {bufnr: integer, n: integer}})
   function signals.on_matches_updated(callback) aug:repeats("User", { pattern = "beckon:matches_updated", callback = callback }) end
+
+  ---@param bufnr integer
+  ---@param focus integer
+  function signals.focus_moved(bufnr, focus) aug:emit("User", { pattern = "beckon:focus_moved", data = { bufnr = bufnr, focus = focus } }) end
+  ---@param callback fun(args: {data: {bufnr:integer, focus:integer}})
+  function signals.on_focus_moved(callback) aug:repeats("User", { pattern = "beckon:focus_moved", callback = callback }) end
 end
 
 local open_win
@@ -109,6 +116,7 @@ do
   do
     ---@class beckon.RHS
     ---@field bufnr integer
+    ---@field focus integer @0-based; impacted by query line, buf line count and win height
     ---@field on_pick beckon.OnPick
     local Impl = {}
     Impl.__index = Impl
@@ -145,8 +153,9 @@ do
     end
 
     ---@param action beckon.Action
-    function Impl:pick_first(action)
-      local line = buflines.line(self.bufnr, 1)
+    function Impl:pick_focus(action)
+      local line = buflines.line(self.bufnr, self.focus + 1)
+
       if line == nil then
         close_current_win()
         return jelly.info("no match")
@@ -162,12 +171,37 @@ do
 
     function Impl:cancel() close_current_win() end
 
-    function Impl:insert_to_normal() feedkeys("<esc>j^", 'n') end
+    function Impl:insert_to_normal() feedkeys("<esc>j^", "n") end
+
+    ---@param step integer
+    function Impl:move_focus(step)
+      local winid = api.nvim_get_current_win()
+      local win_height = api.nvim_win_get_height(winid)
+
+      local high
+      do
+        local line_count = buflines.count(self.bufnr)
+        high = win_height
+        if line_count < win_height then high = line_count end
+        high = high - 1 -- query line
+        high = high - 1 -- count -> high
+      end
+
+      local focus = self.focus + step
+      if focus < 0 then -- -1=high
+        focus = high - ((-focus % (high + 1)) - 1)
+      elseif focus > high then
+        focus = focus % (high + 1)
+      end
+
+      self.focus = focus
+      signals.focus_moved(self.bufnr, focus)
+    end
 
     ---@param bufnr integer
     ---@param on_pick beckon.OnPick
     ---@return beckon.RHS
-    function RHS(bufnr, on_pick) return setmetatable({ bufnr = bufnr, on_pick = on_pick }, Impl) end
+    function RHS(bufnr, on_pick) return setmetatable({ bufnr = bufnr, focus = 0, on_pick = on_pick }, Impl) end
   end
 
   ---@param bufnr integer
@@ -203,6 +237,7 @@ do
         buflines.replaces(bufnr, 1, buflines.count(bufnr), matches)
 
         signals.matches_updated(bufnr, #matches)
+        signals.focus_moved(bufnr, 0)
       end)
 
       uv.timer_stop(timer)
@@ -231,6 +266,7 @@ do
       buflines.replaces(bufnr, 1, 1, matches)
 
       signals.matches_updated(bufnr, #matches)
+      signals.focus_moved(bufnr, 0)
     end
 
     do
@@ -239,12 +275,12 @@ do
 
       bm.n("gi", function() rhs:goto_query_line() end)
 
-      bm.i("<cr>", function() rhs:pick_first("cr") end)
-      bm.i("<space>", function() rhs:pick_first("space") end)
-      bm.i("<c-m>", function() rhs:pick_first("cr") end)
-      bm.i("<c-/>", function() rhs:pick_first("v") end)
-      bm.i("<c-o>", function() rhs:pick_first("o") end)
-      bm.i("<c-t>", function() rhs:pick_first("t") end)
+      bm.i("<cr>", function() rhs:pick_focus("cr") end)
+      bm.i("<space>", function() rhs:pick_focus("space") end)
+      bm.i("<c-m>", function() rhs:pick_focus("cr") end)
+      bm.i("<c-/>", function() rhs:pick_focus("v") end)
+      bm.i("<c-o>", function() rhs:pick_focus("o") end)
+      bm.i("<c-t>", function() rhs:pick_focus("t") end)
 
       bm.n("<cr>", function() rhs:pick_cursor("cr") end)
       bm.n("gf", function() rhs:pick_cursor("cr") end)
@@ -256,6 +292,9 @@ do
 
       bm.i("<c-c>", function() rhs:cancel() end)
       bm.i("<c-d>", function() rhs:cancel() end)
+
+      bm.i("<c-n>", function() rhs:move_focus(1) end)
+      bm.i("<c-p>", function() rhs:move_focus(-1) end)
 
       ---to keep consistent experience with fond
       bm.i("<esc>", function() rhs:cancel() end)
@@ -282,11 +321,20 @@ do --signal actions
     local bufnr = args.data.bufnr
     if not api.nvim_buf_is_valid(bufnr) then return end
 
-    if extmarks[bufnr] ~= nil then api.nvim_buf_del_extmark(bufnr, facts.queryextmark_ns, extmarks[bufnr]) end
-    extmarks[bufnr] = api.nvim_buf_set_extmark(bufnr, facts.queryextmark_ns, 0, 0, {
+    if extmarks[bufnr] ~= nil then api.nvim_buf_del_extmark(bufnr, facts.xm_query_ns, extmarks[bufnr]) end
+    extmarks[bufnr] = api.nvim_buf_set_extmark(bufnr, facts.xm_query_ns, 0, 0, {
       virt_text_pos = "eol",
       virt_text = { { string.format("#%d", args.data.n), "Comment" } },
     })
+  end)
+
+  signals.on_focus_moved(function(args)
+    local bufnr = args.data.bufnr
+
+    api.nvim_buf_clear_namespace(bufnr, facts.xm_focus_ns, 0, -1)
+
+    local lnum = args.data.focus + 1
+    api.nvim_buf_add_highlight(bufnr, facts.xm_focus_ns, "Search", lnum, 0, -1)
   end)
 end
 

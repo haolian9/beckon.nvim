@@ -27,7 +27,8 @@ do
   M.floatwin_ns = ns
 end
 
-M.queryextmark_ns = api.nvim_create_namespace("beckon:extmark:query")
+M.xm_query_ns = api.nvim_create_namespace("beckon:xm:query")
+M.xm_focus_ns = api.nvim_create_namespace("beckon:xm:focus")
 
 M.onkey_ns = api.nvim_create_namespace("beckon:onkey")
 
