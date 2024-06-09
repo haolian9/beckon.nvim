@@ -16,6 +16,7 @@ local buflines = require("infra.buflines")
 local dictlib = require("infra.dictlib")
 local Ephemeral = require("infra.Ephemeral")
 local feedkeys = require("infra.feedkeys")
+local iuv = require("infra.iuv")
 local jelly = require("infra.jellyfish")("beckon", "debug")
 local bufmap = require("infra.keymap.buffer")
 local prefer = require("infra.prefer")
@@ -211,7 +212,7 @@ do
   local function MatchesUpdator(bufnr, all_candidates, strict_path)
     local last_token = ""
     local last_matches = all_candidates
-    local timer = uv.new_timer()
+    local timer = iuv.new_timer()
 
     return function()
       local token = get_query(bufnr)
