@@ -19,6 +19,7 @@ local feedkeys = require("infra.feedkeys")
 local iuv = require("infra.iuv")
 local jelly = require("infra.jellyfish")("beckon", "debug")
 local bufmap = require("infra.keymap.buffer")
+local listlib = require("infra.listlib")
 local prefer = require("infra.prefer")
 local rifts = require("infra.rifts")
 local strlib = require("infra.strlib")
@@ -48,6 +49,62 @@ do
   function signals.focus_moved(bufnr, focus) aug:emit("User", { pattern = "beckon:focus_moved", data = { bufnr = bufnr, focus = focus } }) end
   ---@param callback fun(args: {data: {bufnr:integer, focus:integer}})
   function signals.on_focus_moved(callback) aug:repeats("User", { pattern = "beckon:focus_moved", callback = callback }) end
+end
+
+---@param bufnr integer
+---@return string @always be lowercase
+local function get_query(bufnr)
+  local line = assert(buflines.line(bufnr, 0))
+  return string.lower(line)
+end
+
+---@param winid integer
+---@param bufnr integer
+---@param all_candidates string[]
+---@param strict_path boolean
+---@return fun()
+local function MatchesUpdator(winid, bufnr, all_candidates, strict_path)
+  local last_token = ""
+  local last_matches = all_candidates
+  local timer = iuv.new_timer()
+
+  return function()
+    local token = get_query(bufnr)
+    if token == last_token then return end
+
+    local candidates
+    if strlib.startswith(token, last_token) then
+      candidates = last_matches
+    else
+      --todo: also optimize for <c-h>/<del>/<c-w>
+      candidates = all_candidates
+    end
+
+    local updator = vim.schedule_wrap(function()
+      local matches
+      do
+        local start_time = uv.hrtime()
+        matches = fuzzymatch(candidates, token, { strict_path = strict_path, sort = "asc" })
+        local elapsed_time = uv.hrtime() - start_time
+        jelly.info("matching against %d items, elapsed %.3fms", #candidates, elapsed_time / 1000000)
+      end
+
+      last_token, last_matches = token, matches
+
+      do --update the content of the buf
+        local win_height = api.nvim_win_get_height(winid)
+        local lines = listlib.slice(matches, 1, 3 * win_height)
+        --todo: WinScrolled to append rest matches?
+        buflines.replaces(bufnr, 1, buflines.count(bufnr), lines)
+      end
+
+      signals.matches_updated(bufnr, #matches)
+      signals.focus_moved(bufnr, 0)
+    end)
+
+    uv.timer_stop(timer)
+    uv.timer_start(timer, facts.update_interval, 0, updator)
+  end
 end
 
 local open_win
@@ -106,13 +163,6 @@ end
 
 local create_buf
 do
-  ---@param bufnr integer
-  ---@return string @always be lowercase
-  local function get_query(bufnr)
-    local line = assert(buflines.line(bufnr, 0))
-    return string.lower(line)
-  end
-
   local RHS
   do
     ---@class beckon.RHS
@@ -205,47 +255,6 @@ do
     function RHS(bufnr, on_pick) return setmetatable({ bufnr = bufnr, focus = 0, on_pick = on_pick }, Impl) end
   end
 
-  ---@param bufnr integer
-  ---@param all_candidates string[]
-  ---@param strict_path boolean
-  ---@return fun()
-  local function MatchesUpdator(bufnr, all_candidates, strict_path)
-    local last_token = ""
-    local last_matches = all_candidates
-    local timer = iuv.new_timer()
-
-    return function()
-      local token = get_query(bufnr)
-      if token == last_token then return end
-
-      local candidates
-      if strlib.startswith(token, last_token) then
-        candidates = last_matches
-      else
-        --todo: also optimize for <c-h>/<del>/<c-w>
-        candidates = all_candidates
-      end
-
-      local updator = vim.schedule_wrap(function()
-        local matches
-        do
-          local start_time = uv.hrtime()
-          matches = fuzzymatch(candidates, token, { strict_path = strict_path })
-          local elapsed_time = uv.hrtime() - start_time
-          jelly.info("matching against %d items, elapsed %.3fms", #candidates, elapsed_time / 1000000)
-        end
-        last_token, last_matches = token, matches
-        buflines.replaces(bufnr, 1, buflines.count(bufnr), matches)
-
-        signals.matches_updated(bufnr, #matches)
-        signals.focus_moved(bufnr, 0)
-      end)
-
-      uv.timer_stop(timer)
-      uv.timer_start(timer, facts.update_interval, 0, updator)
-    end
-  end
-
   ---@param purpose string @used for bufname, win title
   ---@param candidates string[]
   ---@param on_pick beckon.OnPick
@@ -301,13 +310,6 @@ do
       bm.i("<esc>", function() rhs:cancel() end)
       bm.i("<c-[>", function() rhs:cancel() end)
       bm.i("<c-]>", function() rhs:insert_to_normal() end)
-    end
-
-    do
-      local aug = augroups.BufAugroup(bufnr, true)
-      local update_matches = MatchesUpdator(bufnr, candidates, opts.strict_path)
-      aug:repeats("TextChangedI", { callback = update_matches })
-      aug:repeats("TextChanged", { callback = update_matches })
     end
 
     return bufnr
@@ -371,6 +373,13 @@ do --main
 
     local bufnr = create_buf(purpose, candidates, on_pick, opts)
     local winid = opts.open_win(purpose, bufnr)
+
+    do
+      local aug = augroups.BufAugroup(bufnr, true)
+      local update_matches = MatchesUpdator(winid, bufnr, candidates, opts.strict_path)
+      aug:repeats("TextChangedI", { callback = update_matches })
+      aug:repeats("TextChanged", { callback = update_matches })
+    end
 
     feedkeys("ggA", "n")
 
