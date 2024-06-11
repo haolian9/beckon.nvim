@@ -1,4 +1,4 @@
-an opinionated fuzzy matching picker
+an opinionated fuzzy picker
 
 https://github.com/haolian9/zongzi/assets/6236829/34283b3a-f9dc-44fc-aaad-5b4fcda2785e
 
@@ -29,11 +29,14 @@ i need a lightweight fuzzy matching picker in nvim to replace fzf in **some spec
 ## status
 * just works
 * the use of ffi may crash nvim
-* speed, performance: i have not put too much efforts on it
+* performance can be bad
+
+## efforts on efficiency
+* reuse last matched results rather than matching against all candidates
+* load 3*beckon-win-height entries rather than all
 
 ## todo
 * [ ] highlight token
-* [ ] reduce lines showed in the buffer, based on the scope of view
 
 ## sources
 * [x] buffers
@@ -42,7 +45,6 @@ i need a lightweight fuzzy matching picker in nvim to replace fzf in **some spec
 * [x] emojis
 * [x] windows
 * [ ] lsp document symbol
-* ~~[ ] lsp workspace symbol~~
 
 ## prerequisites
 * zig 0.12
