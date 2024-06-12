@@ -1,28 +1,4 @@
-local ffi = require("ffi")
-
-local fs = require("infra.fs")
-
-local facts = require("beckon.facts")
-
-ffi.cdef([[
-  double rankToken(
-    const char *str, const char *filename, const char *token,
-    bool case_sensitive, bool strict_path
-  );
-]])
-
-local C = ffi.load(fs.joinpath(facts.root, "zig-out/lib/libzf.so"), false)
-
----@param str string @it will be converted to lowercase internally
----@param filename? string @meaning?
----@param token string
----@param case_sensitive boolean @false: no convert the tokens to lowercase
----@param strict_path boolean @meaning?
----@return number @-1 when no match
-local function rank_token(str, filename, token, case_sensitive, strict_path)
-  local rank = C.rankToken(str, filename, token, case_sensitive, strict_path)
-  return assert(tonumber(rank))
-end
+local unsafe = require("beckon.unsafe")
 
 ---@class beckon.fuzzymatch.Opts
 ---@field strict_path? boolean @nil=false
@@ -60,7 +36,7 @@ return function(candidates, token, opts)
   if opts.sort == false then --shortcut
     local matches = {}
     for _, cand in ipairs(candidates) do
-      local rank = rank_token(opts.tostr(cand), nil, token, false, opts.strict_path)
+      local rank = unsafe.rank_token(opts.tostr(cand), nil, token, false, opts.strict_path)
       if rank ~= -1 then table.insert(matches, cand) end
     end
     return matches
@@ -68,7 +44,7 @@ return function(candidates, token, opts)
 
   local ranks = {} ---@type [any,integer][] @[(candidate, rank)]
   for _, cand in ipairs(candidates) do
-    local rank = rank_token(opts.tostr(cand), nil, token, false, opts.strict_path)
+    local rank = unsafe.rank_token(opts.tostr(cand), nil, token, false, opts.strict_path)
     if rank ~= -1 then table.insert(ranks, { cand, rank }) end
   end
   if #ranks == 0 then return {} end

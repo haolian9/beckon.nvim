@@ -8,14 +8,14 @@
 ---* no i_c-u and i_c-d
 ---* no fzf --nth
 ---* focus line: cycle in visible match lines, reset to 0 when matches updated
----
----todo: highlight tokens
 
+local ascii = require("infra.ascii")
 local augroups = require("infra.augroups")
 local buflines = require("infra.buflines")
 local dictlib = require("infra.dictlib")
 local Ephemeral = require("infra.Ephemeral")
 local feedkeys = require("infra.feedkeys")
+local itertools = require("infra.itertools")
 local iuv = require("infra.iuv")
 local jelly = require("infra.jellyfish")("beckon", "debug")
 local bufmap = require("infra.keymap.buffer")
@@ -27,6 +27,7 @@ local wincursor = require("infra.wincursor")
 
 local facts = require("beckon.facts")
 local fuzzymatch = require("beckon.fuzzymatch")
+local himatch = require("beckon.himatch")
 
 local api = vim.api
 local uv = vim.uv
@@ -39,9 +40,10 @@ do
   local aug = augroups.Augroup("beckon")
 
   ---@param bufnr integer
-  ---@param n integer @number of matches
-  function signals.matches_updated(bufnr, n) aug:emit("User", { pattern = "beckon:matches_updated", data = { bufnr = bufnr, n = n } }) end
-  ---@param callback fun(args: {data: {bufnr: integer, n: integer}})
+  ---@param match_opts beckon.fuzzymatch.Opts
+  ---@param matches string[]
+  function signals.matches_updated(bufnr, match_opts, matches) aug:emit("User", { pattern = "beckon:matches_updated", data = { bufnr = bufnr, match_opts = match_opts, matches = matches } }) end
+  ---@param callback fun(args: {data: {bufnr:integer, match_opts:beckon.fuzzymatch.Opts, matches:string[]}})
   function signals.on_matches_updated(callback) aug:repeats("User", { pattern = "beckon:matches_updated", callback = callback }) end
 
   ---@param bufnr integer
@@ -58,15 +60,17 @@ local function get_query(bufnr)
   return string.lower(line)
 end
 
----@param winid integer
 ---@param bufnr integer
 ---@param all_candidates string[]
 ---@param strict_path boolean
 ---@return fun()
-local function MatchesUpdator(winid, bufnr, all_candidates, strict_path)
+local function MatchesUpdator(bufnr, all_candidates, strict_path)
   local last_token = ""
   local last_matches = all_candidates
   local timer = iuv.new_timer()
+
+  ---@type beckon.fuzzymatch.Opts
+  local match_opts = { strict_path = strict_path }
 
   return function()
     local token = get_query(bufnr)
@@ -76,7 +80,7 @@ local function MatchesUpdator(winid, bufnr, all_candidates, strict_path)
     if strlib.startswith(token, last_token) then
       candidates = last_matches
     else
-      --todo: also optimize for <c-h>/<del>/<c-w>
+      --maybe: also optimize for <c-h>/<del>/<c-w>
       candidates = all_candidates
     end
 
@@ -84,21 +88,17 @@ local function MatchesUpdator(winid, bufnr, all_candidates, strict_path)
       local matches
       do
         local start_time = uv.hrtime()
-        matches = fuzzymatch(candidates, token, { strict_path = strict_path, sort = "asc" })
+        matches = fuzzymatch(candidates, token, match_opts)
         local elapsed_time = uv.hrtime() - start_time
         jelly.info("matching against %d items, elapsed %.3fms", #candidates, elapsed_time / 1000000)
       end
 
       last_token, last_matches = token, matches
 
-      do --update the content of the buf
-        local win_height = api.nvim_win_get_height(winid)
-        local lines = listlib.slice(matches, 1, 3 * win_height)
-        --todo: WinScrolled to append rest matches?
-        buflines.replaces(bufnr, 1, buflines.count(bufnr), lines)
-      end
+      --maybe: WinScrolled to append rest matches
+      buflines.replaces(bufnr, 1, -1, listlib.slice(matches, 1, vim.go.lines))
 
-      signals.matches_updated(bufnr, #matches)
+      signals.matches_updated(bufnr, match_opts, matches)
       signals.focus_moved(bufnr, 0)
     end)
 
@@ -263,19 +263,22 @@ do
     local bufnr = Ephemeral({ modifiable = true, handyclose = true, namepat = string.format("beckon://%s/{bufnr}", purpose) })
 
     do
+      ---@type beckon.fuzzymatch.Opts
+      local match_opts = { strict_path = opts.strict_path }
+
       local query, matches
       if opts.default_query ~= nil then
         query = assert(opts.default_query)
-        matches = fuzzymatch(candidates, query, { strict_path = opts.strict_path })
+        matches = fuzzymatch(candidates, query, match_opts)
       else
         query = ""
         matches = candidates
       end
 
       buflines.replace(bufnr, 0, query)
-      buflines.replaces(bufnr, 1, 1, matches)
+      buflines.replaces(bufnr, 1, -1, listlib.slice(matches, 1, vim.go.lines))
 
-      signals.matches_updated(bufnr, #matches)
+      signals.matches_updated(bufnr, match_opts, matches)
       signals.focus_moved(bufnr, 0)
     end
 
@@ -317,18 +320,49 @@ do
 end
 
 do --signal actions
+  ---for each buffer
   ---@type {[integer]: integer}
-  local extmarks = {}
+  local query_xmarks = {}
+
+  ---@param bufnr integer
+  ---@param matches string[]
+  local function update_query_xmarks(bufnr, matches)
+    if query_xmarks[bufnr] ~= nil then api.nvim_buf_del_extmark(bufnr, facts.xm_query_ns, query_xmarks[bufnr]) end
+    query_xmarks[bufnr] = api.nvim_buf_set_extmark(bufnr, facts.xm_query_ns, 0, 0, {
+      virt_text_pos = "eol",
+      virt_text = { { string.format("#%d", #matches), "Comment" } },
+    })
+  end
+
+  ---@param bufnr integer
+  ---@param match_opts beckon.fuzzymatch.Opts
+  ---@param matches string[]
+  local function update_token_highlights(bufnr, match_opts, matches)
+    api.nvim_buf_clear_namespace(bufnr, facts.xm_hi_ns, 0, -1)
+
+    local token = get_query(bufnr)
+    if token == "" then return end
+
+    ---currently it only processes the first page of the buffer,
+    ---so there is no to use nvim_set_decoration_provider here
+    local his = himatch(itertools.head(matches, api.nvim_win_get_height(0)), token, { strict_path = match_opts.strict_path })
+
+    for lnum, ranges in itertools.enumerate(his) do
+      lnum = lnum + 1 --query line
+      for _, range in ipairs(ranges) do
+        api.nvim_buf_add_highlight(bufnr, facts.xm_hi_ns, "BeckonToken", lnum, range[1], range[2] + 1)
+      end
+    end
+  end
 
   signals.on_matches_updated(function(args)
     local bufnr = args.data.bufnr
     if not api.nvim_buf_is_valid(bufnr) then return end
 
-    if extmarks[bufnr] ~= nil then api.nvim_buf_del_extmark(bufnr, facts.xm_query_ns, extmarks[bufnr]) end
-    extmarks[bufnr] = api.nvim_buf_set_extmark(bufnr, facts.xm_query_ns, 0, 0, {
-      virt_text_pos = "eol",
-      virt_text = { { string.format("#%d", args.data.n), "Comment" } },
-    })
+    local matches, match_opts = args.data.matches, args.data.match_opts
+
+    update_query_xmarks(bufnr, matches)
+    update_token_highlights(bufnr, match_opts, matches)
   end)
 
   signals.on_focus_moved(function(args)
@@ -337,7 +371,7 @@ do --signal actions
     api.nvim_buf_clear_namespace(bufnr, facts.xm_focus_ns, 0, -1)
 
     local lnum = args.data.focus + 1
-    api.nvim_buf_add_highlight(bufnr, facts.xm_focus_ns, "Search", lnum, 0, -1)
+    api.nvim_buf_add_highlight(bufnr, facts.xm_focus_ns, "BeckonFocusLine", lnum, 0, -1)
   end)
 end
 
@@ -376,7 +410,7 @@ do --main
 
     do
       local aug = augroups.BufAugroup(bufnr, true)
-      local update_matches = MatchesUpdator(winid, bufnr, candidates, opts.strict_path)
+      local update_matches = MatchesUpdator(bufnr, candidates, opts.strict_path)
       aug:repeats("TextChangedI", { callback = update_matches })
       aug:repeats("TextChanged", { callback = update_matches })
     end
@@ -386,7 +420,7 @@ do --main
     if opts.default_query ~= nil and opts.default_query ~= "" then
       on_first_key(function(key)
         local code = string.byte(key)
-        if code >= 0x21 and code <= 0x7e then --clear default query
+        if code >= ascii.exclam and code <= ascii.tilde then --clear default query
           api.nvim_buf_set_text(bufnr, 0, 0, 0, #opts.default_query, { "" })
         end
       end)
