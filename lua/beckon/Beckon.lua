@@ -355,7 +355,12 @@ do --signal actions
     for index, ranges in itertools.enumerate(his) do
       local lnum = index + 1 --query line
       for _, range in ipairs(ranges) do
-        api.nvim_buf_add_highlight(bufnr, facts.xm_hi_ns, "BeckonToken", lnum, range[1], range[2] + 1)
+        api.nvim_buf_set_extmark(bufnr, facts.xm_hi_ns, lnum, range[1], {
+          end_row = lnum,
+          end_col = range[2] + 1,
+          hl_group = "BeckonToken",
+          hl_mode = "combine",
+        })
       end
     end
   end
