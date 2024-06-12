@@ -283,6 +283,11 @@ do
     end
 
     do
+      local aug = augroups.BufAugroup(bufnr, true)
+      aug:repeats({ "TextChangedI", "TextChanged" }, { callback = MatchesUpdator(bufnr, candidates, opts.strict_path) })
+    end
+
+    do
       local bm = bufmap.wraps(bufnr)
       local rhs = RHS(bufnr, on_pick)
 
@@ -347,8 +352,8 @@ do --signal actions
     ---so there is no to use nvim_set_decoration_provider here
     local his = himatch(itertools.head(matches, api.nvim_win_get_height(0)), token, { strict_path = match_opts.strict_path })
 
-    for lnum, ranges in itertools.enumerate(his) do
-      lnum = lnum + 1 --query line
+    for index, ranges in itertools.enumerate(his) do
+      local lnum = index + 1 --query line
       for _, range in ipairs(ranges) do
         api.nvim_buf_add_highlight(bufnr, facts.xm_hi_ns, "BeckonToken", lnum, range[1], range[2] + 1)
       end
@@ -407,13 +412,6 @@ do --main
 
     local bufnr = create_buf(purpose, candidates, on_pick, opts)
     local winid = opts.open_win(purpose, bufnr)
-
-    do
-      local aug = augroups.BufAugroup(bufnr, true)
-      local update_matches = MatchesUpdator(bufnr, candidates, opts.strict_path)
-      aug:repeats("TextChangedI", { callback = update_matches })
-      aug:repeats("TextChanged", { callback = update_matches })
-    end
 
     feedkeys("ggA", "n")
 

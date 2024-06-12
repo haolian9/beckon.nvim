@@ -12,13 +12,18 @@ end
 
 do
   local hi = highlighter(0)
+
+  --CAUTION: DO NOT SET fg for BeckonFocusLine, it causes highlighting issue, when BeckonToken is at the begining of a line
+
   if vim.go.background == "light" then
-    hi("BeckonFocusLine", { fg = 8, bg = 222 })
+    hi("BeckonFocusLine", { bg = 222 })
     hi("BeckonToken", { fg = 1, bold = true })
   else
-    hi("BeckonFocusLine", { fg = 0, bg = 178 })
+    hi("BeckonFocusLine", { bg = 178 })
     hi("BeckonToken", { fg = 9, bold = true })
   end
+
+  assert(api.nvim_get_hl_by_name("BeckonFocusLine", false).foreground == nil)
 end
 
 do
