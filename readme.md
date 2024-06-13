@@ -14,7 +14,7 @@ i need a lightweight fuzzy matching picker in nvim to replace fzf in **some spec
 * no fancy UI
 * no seperated windows for user input and matched result
     * and unexpected user operations to buffers may cause troubles likely
-* default query
+* default query / placeholder
 * clear the default query when user input something new
 * multiple actions for the picked entry
     * n_{i,o,v,t}, i_c-{m,o,/,t}
@@ -29,14 +29,15 @@ i need a lightweight fuzzy matching picker in nvim to replace fzf in **some spec
 ## status
 * just works
 * the use of ffi may crash nvim
+* feature complete
 * performance can be bad
 
 ## efforts on efficiency
-* reuse last matched results rather than matching against all candidates
-* load 3*beckon-win-height entries rather than all
-
-## todo
-* [ ] highlight token
+* incremental matching results
+* load partial results to the buffer
+* merge update events happened in a period
+* minimal lines to add highlights of matched token
+    * yet, nvim_set_decoration_provider is not being used.
 
 ## sources
 * [x] buffers
