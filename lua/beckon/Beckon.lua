@@ -148,7 +148,8 @@ do
   ---@param bufnr integer
   ---@return integer winid
   function open_win(purpose, bufnr)
-    local winopts = { relative = "win", border = "single", zindex = 250, title = string.format("beckon://%s", purpose), title_pos = "center" }
+    local _ = purpose
+    local winopts = { relative = "win", border = "single", zindex = 250 }
     local host_winid = api.nvim_get_current_win()
     dictlib.merge(winopts, resolve_geometry(host_winid))
 

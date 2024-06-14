@@ -40,15 +40,18 @@ end
 ---@field kind? string
 ---@field open_win? beckon.OpenWin
 
+---@alias beckon.select.OnSelect fun(entry:string?, row:number?, action:beckon.Action) @row:1-based
+
 ---CAUTION: callback wont be called when user cancels (due to Beckon current impl)
 ---@param entries string[]
 ---@param opts beckon.select.Opts
----@param callback fun(entry: string?, index: number?, action: beckon.Action) @index: 1-based
-return function(entries, opts, callback)
+---@param on_select beckon.select.OnSelect
+return function(entries, opts, on_select)
   if opts.format_item == nil then opts.format_item = function(s) return s end end
 
   ---@type string[] @pattern="{entry} (index)"
-  local candidates = its(listlib.enumerate1(entries)) --
+  local candidates = its(entries) --
+    :enumerate1()
     :mapn(function(i, ent) return string.format("%s (%d)", opts.format_item(ent), i) end)
     :tolist()
 
@@ -56,7 +59,7 @@ return function(entries, opts, callback)
     local index = assert(string.match(line, "%((%d+)%)$"))
     index = assert(tonumber(index))
     local entry = assert(entries[index])
-    callback(entry, index, action)
+    on_select(entry, index, action)
   end, { open_win = opts.open_win or open_win })
 
   if opts.prompt ~= nil then --inline extmark as prompt

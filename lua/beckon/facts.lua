@@ -19,7 +19,7 @@ do
     hi("BeckonFocusLine", { bg = 222 })
     hi("BeckonToken", { fg = 1, bold = true })
   else
-    hi("BeckonFocusLine", { bg = 178 })
+    hi("BeckonFocusLine", { bg = 3 })
     hi("BeckonToken", { fg = 9, bold = true })
   end
 
