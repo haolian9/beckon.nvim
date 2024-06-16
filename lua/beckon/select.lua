@@ -1,14 +1,12 @@
 local buflines = require("infra.buflines")
 local itertools = require("infra.itertools")
 local its = require("infra.its")
-local listlib = require("infra.listlib")
+local ni = require("infra.ni")
 local rifts = require("infra.rifts")
 local unsafe = require("infra.unsafe")
 
 local Beckon = require("beckon.Beckon")
 local facts = require("beckon.facts")
-
-local api = vim.api
 
 ---keep the same as puff.select
 ---@param purpose string
@@ -63,7 +61,7 @@ return function(entries, opts, on_select)
   end, { open_win = opts.open_win or open_win })
 
   if opts.prompt ~= nil then --inline extmark as prompt
-    api.nvim_buf_set_extmark(bufnr, facts.xm_query_ns, 0, 0, {
+    ni.buf_set_extmark(bufnr, facts.xm_query_ns, 0, 0, {
       virt_text = { { opts.prompt, "Question" }, { " " } },
       virt_text_pos = "inline",
       right_gravity = false,

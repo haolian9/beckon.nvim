@@ -1,14 +1,10 @@
 local M = {}
 
-local fs = require("infra.fs")
 local highlighter = require("infra.highlighter")
+local ni = require("infra.ni")
+local resolve_plugin_root = require("infra.resolve_plugin_root")
 
-local api = vim.api
-
-do
-  local lua_root = fs.resolve_plugin_root("beckon", "facts.lua")
-  M.root = fs.parent(fs.parent(lua_root))
-end
+M.root = resolve_plugin_root("beckon", "facts.lua")
 
 do
   local hi = highlighter(0)
@@ -23,11 +19,11 @@ do
     hi("BeckonToken", { fg = 9, bold = true })
   end
 
-  assert(api.nvim_get_hl_by_name("BeckonFocusLine", false).foreground == nil)
+  assert(ni.get_hl_by_name("BeckonFocusLine", false).foreground == nil)
 end
 
 do
-  local ns = api.nvim_create_namespace("beckon:floatwin")
+  local ns = ni.create_namespace("beckon:floatwin")
   local hi = highlighter(ns)
   if vim.go.background == "light" then
     hi("NormalFloat", { fg = 0 })
@@ -42,10 +38,10 @@ do
   M.floatwin_ns = ns
 end
 
-M.xm_query_ns = api.nvim_create_namespace("beckon:xm:query")
-M.xm_focus_ns = api.nvim_create_namespace("beckon:xm:focus")
-M.xm_hi_ns = api.nvim_create_namespace("beckon:xm:hi")
-M.onkey_ns = api.nvim_create_namespace("beckon:onkey")
+M.xm_query_ns = ni.create_namespace("beckon:xm:query")
+M.xm_focus_ns = ni.create_namespace("beckon:xm:focus")
+M.xm_hi_ns = ni.create_namespace("beckon:xm:hi")
+M.onkey_ns = ni.create_namespace("beckon:onkey")
 
 --in milliseconds
 M.update_interval = 125

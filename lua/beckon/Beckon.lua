@@ -20,6 +20,7 @@ local iuv = require("infra.iuv")
 local jelly = require("infra.jellyfish")("beckon", "debug")
 local bufmap = require("infra.keymap.buffer")
 local listlib = require("infra.listlib")
+local ni = require("infra.ni")
 local prefer = require("infra.prefer")
 local rifts = require("infra.rifts")
 local strlib = require("infra.strlib")
@@ -29,7 +30,6 @@ local facts = require("beckon.facts")
 local fuzzymatch = require("beckon.fuzzymatch")
 local himatch = require("beckon.himatch")
 
-local api = vim.api
 local uv = vim.uv
 
 ---@alias beckon.Action 'cr'|'space'|'i'|'a'|'v'|'o'|'t'
@@ -150,12 +150,12 @@ do
   function open_win(purpose, bufnr)
     local _ = purpose
     local winopts = { relative = "win", border = "single", zindex = 250 }
-    local host_winid = api.nvim_get_current_win()
+    local host_winid = ni.get_current_win()
     dictlib.merge(winopts, resolve_geometry(host_winid))
 
     local winid = rifts.open.win(bufnr, true, winopts)
 
-    api.nvim_win_set_hl_ns(winid, facts.floatwin_ns)
+    ni.win_set_hl_ns(winid, facts.floatwin_ns)
     prefer.wo(winid, "wrap", false)
 
     return winid
@@ -174,8 +174,8 @@ do
     Impl.__index = Impl
 
     local function close_current_win()
-      if api.nvim_get_mode().mode == "i" then feedkeys("<esc>", "n") end
-      api.nvim_win_close(0, false)
+      if ni.get_mode().mode == "i" then feedkeys("<esc>", "n") end
+      ni.win_close(0, false)
     end
 
     function Impl:goto_query_line() feedkeys("ggA", "n") end
@@ -227,8 +227,8 @@ do
 
     ---@param step integer
     function Impl:move_focus(step)
-      local winid = api.nvim_get_current_win()
-      local win_height = api.nvim_win_get_height(winid)
+      local winid = ni.get_current_win()
+      local win_height = ni.win_get_height(winid)
 
       local high
       do
@@ -333,8 +333,8 @@ do --signal actions
   ---@param bufnr integer
   ---@param matches string[]
   local function update_query_xmarks(bufnr, matches)
-    if query_xmarks[bufnr] ~= nil then api.nvim_buf_del_extmark(bufnr, facts.xm_query_ns, query_xmarks[bufnr]) end
-    query_xmarks[bufnr] = api.nvim_buf_set_extmark(bufnr, facts.xm_query_ns, 0, 0, {
+    if query_xmarks[bufnr] ~= nil then ni.buf_del_extmark(bufnr, facts.xm_query_ns, query_xmarks[bufnr]) end
+    query_xmarks[bufnr] = ni.buf_set_extmark(bufnr, facts.xm_query_ns, 0, 0, {
       virt_text_pos = "eol",
       virt_text = { { string.format("#%d", #matches), "Comment" } },
     })
@@ -344,19 +344,19 @@ do --signal actions
   ---@param match_opts beckon.fuzzymatch.Opts
   ---@param matches string[]
   local function update_token_highlights(bufnr, match_opts, matches)
-    api.nvim_buf_clear_namespace(bufnr, facts.xm_hi_ns, 0, -1)
+    ni.buf_clear_namespace(bufnr, facts.xm_hi_ns, 0, -1)
 
     local token = get_query(bufnr)
     if token == "" then return end
 
     ---currently it only processes the first page of the buffer,
     ---so there is no to use nvim_set_decoration_provider here
-    local his = himatch(itertools.head(matches, api.nvim_win_get_height(0)), token, { strict_path = match_opts.strict_path })
+    local his = himatch(itertools.head(matches, ni.win_get_height(0)), token, { strict_path = match_opts.strict_path })
 
     for index, ranges in itertools.enumerate(his) do
       local lnum = index + 1 --query line
       for _, range in ipairs(ranges) do
-        api.nvim_buf_set_extmark(bufnr, facts.xm_hi_ns, lnum, range[1], {
+        ni.buf_set_extmark(bufnr, facts.xm_hi_ns, lnum, range[1], {
           end_row = lnum,
           end_col = range[2] + 1,
           hl_group = "BeckonToken",
@@ -368,7 +368,7 @@ do --signal actions
 
   signals.on_matches_updated(function(args)
     local bufnr = args.data.bufnr
-    if not api.nvim_buf_is_valid(bufnr) then return end
+    if not ni.buf_is_valid(bufnr) then return end
 
     local matches, match_opts = args.data.matches, args.data.match_opts
 
@@ -379,10 +379,10 @@ do --signal actions
   signals.on_focus_moved(function(args)
     local bufnr = args.data.bufnr
 
-    api.nvim_buf_clear_namespace(bufnr, facts.xm_focus_ns, 0, -1)
+    ni.buf_clear_namespace(bufnr, facts.xm_focus_ns, 0, -1)
 
     local lnum = args.data.focus + 1
-    api.nvim_buf_add_highlight(bufnr, facts.xm_focus_ns, "BeckonFocusLine", lnum, 0, -1)
+    ni.buf_add_highlight(bufnr, facts.xm_focus_ns, "BeckonFocusLine", lnum, 0, -1)
   end)
 end
 
@@ -425,7 +425,7 @@ do --main
       on_first_key(function(key)
         local code = string.byte(key)
         if code >= ascii.exclam and code <= ascii.tilde then --clear default query
-          api.nvim_buf_set_text(bufnr, 0, 0, 0, #opts.default_query, { "" })
+          ni.buf_set_text(bufnr, 0, 0, 0, #opts.default_query, { "" })
         end
       end)
     end

@@ -7,6 +7,7 @@ local itertools = require("infra.itertools")
 local its = require("infra.its")
 local jelly = require("infra.jellyfish")("beckon", "debug")
 local listlib = require("infra.listlib")
+local ni = require("infra.ni")
 local prefer = require("infra.prefer")
 local project = require("infra.project")
 local strlib = require("infra.strlib")
@@ -15,8 +16,6 @@ local winsplit = require("infra.winsplit")
 local Beckon = require("beckon.Beckon")
 local facts = require("beckon.facts")
 local ropes = require("string.buffer")
-
-local api = vim.api
 
 local contracts = {}
 do
@@ -55,7 +54,7 @@ do
 
     if prefer.bo(bufnr, "buftype") ~= "" then return end
 
-    local bufname = api.nvim_buf_get_name(bufnr)
+    local bufname = ni.buf_get_name(bufnr)
     if strlib.find(bufname, "://") then return end
 
     return true
@@ -65,7 +64,7 @@ do
   ---@param bufnr integer
   ---@return string
   local function resolve_bufname(root, bufnr)
-    local bufname = api.nvim_buf_get_name(bufnr)
+    local bufname = ni.buf_get_name(bufnr)
     if bufname == "" then return "__" end
     local relative = fs.relative_path(root, bufname)
     return fs.shorten(relative or bufname)
@@ -89,7 +88,7 @@ do
     ---@type string[]
     local candidates
     do
-      local bufnrs = api.nvim_list_bufs()
+      local bufnrs = ni.list_bufs()
       if #bufnrs == 1 then return jelly.info("no other buffers") end
 
       local root = project.working_root()
@@ -179,7 +178,7 @@ do
       last_query = query
 
       local char = assert(strlib.iter_splits(line, " ")())
-      api.nvim_put({ char }, "c", true, false)
+      ni.put({ char }, "c", true, false)
     end, { default_query = last_query })
   end
 end
@@ -204,7 +203,7 @@ do
       last_query = query
 
       local char = assert(strlib.iter_splits(line, " ")())
-      api.nvim_put({ char }, "c", true, false)
+      ni.put({ char }, "c", true, false)
     end, { default_query = last_query })
   end
 end
@@ -226,7 +225,7 @@ do
       --clone src win
       winsplit(side, src_bufnr)
       vim.fn.winrestview(src_view)
-      local winid = api.nvim_get_current_win()
+      local winid = ni.get_current_win()
       for opt, val in pairs(src_wo) do
         prefer.wo(winid, opt, val)
       end
@@ -247,15 +246,15 @@ do
   function M.windows()
     local candidates = {}
     do
-      local curtab = api.nvim_get_current_tabpage()
-      local tab_iter = itertools.filter(function(tabid) return tabid ~= curtab end, api.nvim_list_tabpages())
+      local curtab = ni.get_current_tabpage()
+      local tab_iter = itertools.filter(function(tabid) return tabid ~= curtab end, ni.list_tabpages())
 
       for tabid in tab_iter do
-        local tabnr = api.nvim_tabpage_get_number(tabid)
-        for winid in itertools.iter(api.nvim_tabpage_list_wins(tabid)) do
-          local bufnr = api.nvim_win_get_buf(winid)
-          local winnr = api.nvim_win_get_number(winid)
-          local bufname = api.nvim_buf_get_name(bufnr)
+        local tabnr = ni.tabpage_get_number(tabid)
+        for winid in itertools.iter(ni.tabpage_list_wins(tabid)) do
+          local bufnr = ni.win_get_buf(winid)
+          local winnr = ni.win_get_number(winid)
+          local bufname = ni.buf_get_name(bufnr)
           bufname = bufname == "" and "__" or fs.shorten(bufname)
 
           table.insert(candidates, contracts.format_line(string.format("%d.%d %s", tabnr, winnr, bufname), winid, bufnr))
