@@ -19,16 +19,19 @@ local ropes = require("string.buffer")
 
 local contracts = {}
 do
-  ---@param str string
-  ---@param ... string|number @meta's
-  ---@return string line @pattern='{str} ({meta,meta})'
-  function contracts.format_line(str, ...)
+  do
     local rope = ropes.new()
-    for i = 1, select("#", ...) do
-      rope:putf(",%s", select(i, ...))
+
+    ---@param str string
+    ---@param ... string|number @meta's
+    ---@return string line @pattern='{str} ({meta,meta})'
+    function contracts.format_line(str, ...)
+      for i = 1, select("#", ...) do
+        rope:putf(",%s", select(i, ...))
+      end
+      local meta = rope:skip(1):get()
+      return string.format("%s (%s)", str, meta)
     end
-    local meta = rope:skip(1):get()
-    return string.format("%s (%s)", str, meta)
   end
 
   ---@param line string

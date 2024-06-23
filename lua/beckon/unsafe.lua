@@ -44,9 +44,9 @@ function M.highlight_token(str, filename, token, case_sensitive, strict_path, ma
   local n = C.highlightToken(str, filename, token, case_sensitive, strict_path, matches, max_matches)
 
   local indices = {}
-  for i = 0, tonumber(n) - 1 do
-    local index = (matches + i)[0]
-    table.insert(indices, assert(tonumber(index)))
+  for i = 1, tonumber(n) do
+    local index = (matches + i - 1)[0]
+    indices[i] = assert(tonumber(index))
   end
 
   return indices
