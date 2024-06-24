@@ -250,7 +250,7 @@ do
     local candidates = {}
     do
       local curtab = ni.get_current_tabpage()
-      local tab_iter = itertools.filter(function(tabid) return tabid ~= curtab end, ni.list_tabpages())
+      local tab_iter = itertools.filter(ni.list_tabpages(), function(tabid) return tabid ~= curtab end)
 
       for tabid in tab_iter do
         local tabnr = ni.tabpage_get_number(tabid)

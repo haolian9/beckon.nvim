@@ -96,7 +96,7 @@ local function MatchesUpdator(bufnr, all_candidates, strict_path)
       last_token, last_matches = token, matches
 
       --maybe: WinScrolled to append rest matches
-      buflines.replaces(bufnr, 1, -1, listlib.slice(matches, 1, vim.go.lines))
+      buflines.replaces(bufnr, 1, -1, listlib.head(matches, 150))
 
       signals.matches_updated(bufnr, match_opts, matches)
       signals.focus_moved(bufnr, 0)
@@ -277,7 +277,7 @@ do
       end
 
       buflines.replace(bufnr, 0, query)
-      buflines.replaces(bufnr, 1, -1, listlib.slice(matches, 1, vim.go.lines))
+      buflines.replaces(bufnr, 1, -1, listlib.head(matches, 150))
 
       signals.matches_updated(bufnr, match_opts, matches)
       signals.focus_moved(bufnr, 0)
