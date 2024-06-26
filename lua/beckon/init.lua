@@ -2,6 +2,8 @@ local M = {}
 
 local bufopen = require("infra.bufopen")
 local ctx = require("infra.ctx")
+local ex = require("infra.ex")
+local feedkeys = require("infra.feedkeys")
 local fs = require("infra.fs")
 local itertools = require("infra.itertools")
 local its = require("infra.its")
@@ -11,6 +13,7 @@ local ni = require("infra.ni")
 local prefer = require("infra.prefer")
 local project = require("infra.project")
 local strlib = require("infra.strlib")
+local unsafe = require("infra.unsafe")
 local winsplit = require("infra.winsplit")
 
 local Beckon = require("beckon.Beckon")
@@ -273,6 +276,23 @@ do
       bufnr = assert(tonumber(bufnr))
 
       assert(acts[action])(winid, bufnr)
+    end, { default_query = last_query })
+  end
+end
+
+do
+  local last_query
+  function M.cmds()
+    local hist = listlib.reversed(itertools.tolist(unsafe.hist_iter()))
+    Beckon("windows", hist, function(query, action, line)
+      last_query = query
+
+      if action == "space" or action == "cr" then
+        ex.eval(line)
+      else
+        feedkeys.codes(":", "n")
+        feedkeys.keys(line, "n")
+      end
     end, { default_query = last_query })
   end
 end
