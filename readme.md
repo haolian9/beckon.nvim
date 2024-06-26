@@ -46,6 +46,7 @@ i need a lightweight fuzzy matching picker in nvim to replace fzf in **some spec
 * [x] emojis
 * [x] windows
 * [ ] lsp document symbol
+* [x] cmds/history
 
 ## prerequisites
 * zig 0.12
