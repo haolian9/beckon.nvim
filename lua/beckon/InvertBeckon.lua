@@ -13,7 +13,6 @@ local ni = require("infra.ni")
 local prefer = require("infra.prefer")
 local rifts = require("infra.rifts")
 local strlib = require("infra.strlib")
-local unsafe = require("infra.unsafe")
 local wincursor = require("infra.wincursor")
 
 local facts = require("beckon.facts")
@@ -75,7 +74,7 @@ do
 
   ---@param ctx beckon.InvertBeckon.Context
   ---@param step integer @accepts negative
-  ---@return integer
+  ---@return integer?
   function contracts.focus_jump(ctx, focus, step)
     local high
     do
@@ -89,6 +88,7 @@ do
       high = high - 1 -- query line
       high = high - ctx.short -- blank lines
       high = high - 1 -- count -> high
+      if high < 1 then return end
     end
 
     local dest = focus + step
@@ -142,11 +142,8 @@ do
       if ctx.short > 0 then buflines.prepends(ctx.bufnr, 0, listlib.zeros(ctx.short, "")) end
     end
 
-    do --keep last line at the bottom of the window
-      local high = buflines.high(ctx.bufnr)
-      local toplnum = math.max(high - win_height + 1, 0)
-      unsafe.win_set_toplnum(ctx.winid, toplnum)
-    end
+    --keep last line at the bottom of the window
+    wincursor.follow(ctx.winid, true)
 
     signals.matches_updated(ctx, matches)
     signals.focus_moved(ctx, 0)
@@ -235,7 +232,6 @@ do
     local winid = rifts.open.win(bufnr, true, winopts)
 
     ni.win_set_hl_ns(winid, facts.floatwin_ns)
-    prefer.wo(winid, "wrap", false)
 
     return winid
   end
@@ -308,7 +304,9 @@ do
   ---@param step integer
   function RHS:move_focus(step)
     local ctx = self.ctx
-    self.focus = contracts.focus_jump(ctx, self.focus, step)
+    local dest = contracts.focus_jump(ctx, self.focus, step)
+    self.focus = dest or 0
+    if dest == nil then return jelly.warn("no matches to focus") end
     signals.focus_moved(ctx, self.focus)
   end
 
@@ -392,16 +390,24 @@ do --signal actions
     ---currently it only processes the first page of the buffer,
     ---so there is no to use nvim_set_decoration_provider here
 
-    local n = ni.win_get_height(ctx.winid)
-    n = n - 1 --query line
-    n = n - ctx.short --filling blank lines
-    assert(n > 0)
+    local start_lnum, stop_lnum
+    do
+      local height = ni.win_get_height(ctx.winid)
+      local high = buflines.high(ctx.bufnr)
+      if ctx.short > 0 then
+        start_lnum = high - (height - ctx.short)
+      else
+        start_lnum = high - height
+      end
+      start_lnum = start_lnum + 1 --query line
+      stop_lnum = high --exclusive
+    end
 
-    local his = himatch(itertools.head(matches, n), token, { strict_path = ctx.match_opts.strict_path })
+    local lines = buflines.lines(ctx.bufnr, start_lnum, stop_lnum)
+    local his = himatch(lines, token, { strict_path = ctx.match_opts.strict_path })
 
-    local offset = ctx.short
     for i, ranges in itertools.enumerate(his) do
-      local lnum = i + offset
+      local lnum = i + start_lnum
       for _, range in ipairs(ranges) do
         ni.buf_set_extmark(ctx.bufnr, facts.xm_hi_ns, lnum, range[1], {
           end_row = lnum,
@@ -450,6 +456,12 @@ return function(purpose, candidates, on_pick, opts)
   local winid = (opts.open_win or default_open_win)(purpose, bufnr)
   local ctx = Context(winid, bufnr, { strict_path = opts.strict_path, sort = "desc" }, candidates)
 
+  do --mandatory winopts
+    local wo = prefer.win(winid)
+    wo.wrap = false
+    wo.signcolumn = "yes:1"
+  end
+
   buf_bind_rhs(ctx, on_pick)
 
   local updator = MatchesUpdator(ctx)
@@ -470,7 +482,7 @@ return function(purpose, candidates, on_pick, opts)
     on_first_key(function(key)
       local code = string.byte(key)
       if code >= ascii.exclam and code <= ascii.tilde then --clear default query
-        ni.buf_set_text(bufnr, 0, 0, 0, #opts.default_query, { "" })
+        ni.buf_set_text(bufnr, -1, 0, -1, #opts.default_query, { "" })
       end
     end)
   end

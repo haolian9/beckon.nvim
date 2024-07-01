@@ -84,17 +84,20 @@ do
   ---@param winid integer
   ---@param bufnr integer
   ---@param step integer @accepts negative
-  ---@return integer
+  ---@return integer?
   function contracts.focus_jump(winid, bufnr, focus, step)
-    local win_height = ni.win_get_height(winid)
-
     local high
     do
+      local win_height = ni.win_get_height(winid)
       local line_count = buflines.count(bufnr)
-      high = win_height
-      if line_count < win_height then high = line_count end
+      if line_count < win_height then
+        high = line_count
+      else
+        high = win_height
+      end
       high = high - 1 -- query line
       high = high - 1 -- count -> high
+      if high < 1 then return end
     end
 
     local jump = focus + step
@@ -228,7 +231,6 @@ do
     local winid = rifts.open.win(bufnr, true, winopts)
 
     ni.win_set_hl_ns(winid, facts.floatwin_ns)
-    prefer.wo(winid, "wrap", false)
 
     return winid
   end
@@ -300,7 +302,9 @@ do
   ---@param step integer
   function RHS:move_focus(step)
     local ctx = self.ctx
-    self.focus = contracts.focus_jump(ctx.winid, ctx.bufnr, self.focus, step)
+    local dest = contracts.focus_jump(ctx.winid, ctx.bufnr, self.focus, step)
+    self.focus = dest or 0
+    if dest == nil then return jelly.warn("no matches to focus") end
     signals.focus_moved(ctx, self.focus)
   end
 
@@ -440,6 +444,12 @@ return function(purpose, candidates, on_pick, opts)
   local bufnr = Ephemeral({ modifiable = true, handyclose = true, namepat = string.format("beckon://%s/{bufnr}", purpose) })
   local winid = (opts.open_win or default_open_win)(purpose, bufnr)
   local ctx = Context(winid, bufnr, { strict_path = opts.strict_path, sort = "asc" }, candidates)
+
+  do --mandatory winopts
+    local wo = prefer.win(winid)
+    wo.wrap = false
+    wo.signcolumn = "yes:1"
+  end
 
   buf_bind_rhs(ctx, on_pick)
 
