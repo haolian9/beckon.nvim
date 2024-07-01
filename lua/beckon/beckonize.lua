@@ -7,7 +7,7 @@ local prefer = require("infra.prefer")
 local rifts = require("infra.rifts")
 local wincursor = require("infra.wincursor")
 
-local Beckon = require("beckon.Beckon")
+local InvertBeckon = require("beckon.InvertBeckon")
 
 local last_queries = LRU(512)
 
@@ -51,7 +51,7 @@ return function(host_winid, callback, opts)
     :mapn(function(line, lnum) return string.format("%s (%d)", string.sub(line, 1, 300), lnum) end)
     :tolist()
 
-  Beckon("beckon", lines, function(query, action, line)
+  InvertBeckon("beckon", lines, function(query, action, line)
     local lnum = assert(string.match(line, "%((%d+)%)$"))
     last_queries[host_winid] = query
     callback(lnum, action)

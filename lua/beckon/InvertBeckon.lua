@@ -1,14 +1,3 @@
----design ghoices
----* no large datasets, or use fond instead
----* no cache, or use fond instead
----* one buffer and one window
----* the first line is for user input
----* the rest lines are matched results
----* no i_c-n and i_c-p
----* no i_c-u and i_c-d
----* no fzf --nth
----* focus line: cycle in visible match lines, reset to 0 when matches updated
-
 local ascii = require("infra.ascii")
 local augroups = require("infra.augroups")
 local buflines = require("infra.buflines")
@@ -24,6 +13,7 @@ local ni = require("infra.ni")
 local prefer = require("infra.prefer")
 local rifts = require("infra.rifts")
 local strlib = require("infra.strlib")
+local unsafe = require("infra.unsafe")
 local wincursor = require("infra.wincursor")
 
 local facts = require("beckon.facts")
@@ -32,40 +22,39 @@ local himatch = require("beckon.himatch")
 
 local uv = vim.uv
 
----@alias beckon.Action 'cr'|'space'|'i'|'a'|'v'|'o'|'t'
----@alias beckon.OnPick fun(query: string, action: beckon.Action, choice: string)
-
 local Context
 do
-  ---@class beckon.Beckon.Context
+  ---@class beckon.InvertBeckon.Context
   ---
-  ---@field winid          integer
-  ---@field bufnr          integer
-  ---@field match_opts     beckon.fuzzymatch.Opts
+  ---@field winid integer
+  ---@field bufnr integer
+  ---@field match_opts beckon.fuzzymatch.Opts
   ---@field all_candidates string[]
+  ---
+  ---@field short integer
 
-  ---@param winid      integer
-  ---@param bufnr      integer
+  ---@param winid integer
+  ---@param bufnr integer
   ---@param match_opts beckon.fuzzymatch.Opts
-  ---@return beckon.Beckon.Context
-  function Context(winid, bufnr, match_opts, all_candidates) return { winid = winid, bufnr = bufnr, match_opts = match_opts, all_candidates = all_candidates } end
+  ---@return beckon.InvertBeckon.Context
+  function Context(winid, bufnr, match_opts, all_candidates) return { winid = winid, bufnr = bufnr, match_opts = match_opts, all_candidates = all_candidates, short = 0 } end
 end
 
 local signals = {}
 do
   local aug = augroups.Augroup("beckon")
 
-  ---@param ctx beckon.Beckon.Context
+  ---@param ctx beckon.InvertBeckon.Context
   ---@param matches string[]
-  function signals.matches_updated(ctx, matches) aug:emit("User", { pattern = "beckon:matches_updated", data = { ctx = ctx, matches = matches } }) end
-  ---@param callback fun(args: {data: {ctx:beckon.Beckon.Context, matches:string[]}})
-  function signals.on_matches_updated(callback) aug:repeats("User", { pattern = "beckon:matches_updated", callback = callback }) end
+  function signals.matches_updated(ctx, matches) aug:emit("User", { pattern = "beckon:invert:matches_updated", data = { ctx = ctx, matches = matches } }) end
+  ---@param callback fun(args: {data: {ctx:beckon.InvertBeckon.Context, matches:string[]}})
+  function signals.on_matches_updated(callback) aug:repeats("User", { pattern = "beckon:invert:matches_updated", callback = callback }) end
 
-  ---@param ctx beckon.Beckon.Context
+  ---@param ctx beckon.InvertBeckon.Context
   ---@param focus integer
-  function signals.focus_moved(ctx, focus) aug:emit("User", { pattern = "beckon:focus_moved", data = { ctx = ctx, focus = focus } }) end
-  ---@param callback fun(args: {data: {ctx:beckon.Beckon.Context, focus:integer}})
-  function signals.on_focus_moved(callback) aug:repeats("User", { pattern = "beckon:focus_moved", callback = callback }) end
+  function signals.focus_moved(ctx, focus) aug:emit("User", { pattern = "beckon:invert:focus_moved", data = { ctx = ctx, focus = focus } }) end
+  ---@param callback fun(args: {data: {ctx:beckon.InvertBeckon.Context, focus:integer}})
+  function signals.on_focus_moved(callback) aug:repeats("User", { pattern = "beckon:invert:focus_moved", callback = callback }) end
 end
 
 local contracts = {}
@@ -73,47 +62,52 @@ do
   ---@param bufnr integer
   ---@return string @always be lowercase
   function contracts.query(bufnr)
-    local line = assert(buflines.line(bufnr, 0))
+    local line = assert(buflines.line(bufnr, -1))
     return string.lower(line)
   end
 
-  function contracts.focus_to_lnum(focus)
-    return focus + 1 --query line
+  function contracts.query_lnum(bufnr) return buflines.high(bufnr) end
+
+  function contracts.focus_to_lnum(bufnr, focus)
+    local high = buflines.high(bufnr)
+    return high - focus - 1 --query line
   end
 
-  ---@param winid integer
-  ---@param bufnr integer
+  ---@param ctx beckon.InvertBeckon.Context
   ---@param step integer @accepts negative
   ---@return integer
-  function contracts.focus_jump(winid, bufnr, focus, step)
-    local win_height = ni.win_get_height(winid)
-
+  function contracts.focus_jump(ctx, focus, step)
     local high
     do
-      local line_count = buflines.count(bufnr)
-      high = win_height
-      if line_count < win_height then high = line_count end
+      local win_height = ni.win_get_height(ctx.winid)
+      local line_count = buflines.count(ctx.bufnr)
+      if line_count < win_height then
+        high = line_count
+      else
+        high = win_height
+      end
       high = high - 1 -- query line
+      high = high - ctx.short -- blank lines
       high = high - 1 -- count -> high
     end
 
-    local jump = focus + step
+    local dest = focus + step
 
-    if jump < 0 then -- -1=high
-      return high - ((-jump % (high + 1)) - 1)
-    elseif jump > high then
-      return jump % (high + 1)
+    if dest < 0 then -- -1=high
+      return high - ((-dest % (high + 1)) - 1)
+    elseif dest > high then
+      return dest % (high + 1)
     else
-      return jump
+      return dest
     end
   end
 end
 
 local MatchesUpdator
 do
-  ---@class beckon.Beckon.MatchesUpdator
-  ---@field private ctx          beckon.Beckon.Context
-  ---@field private ready        boolean @wether ready for update
+  ---@class beckon.InvertBeckon.MatchesUpdator
+  ---@field private ctx          beckon.InvertBeckon.Context
+  ---@field private ready        boolean @whether ready for update
   ---@field private last_token   string
   ---@field private last_matches string[]
   ---@field private timer        ffi.cdata*
@@ -138,8 +132,21 @@ do
 
     self.last_token, self.last_matches = token, matches
 
-    --maybe: WinScrolled to append rest matches
-    buflines.replaces(ctx.bufnr, 1, -1, listlib.head(matches, 150))
+    local body = listlib.head(matches, 150)
+    buflines.replaces(ctx.bufnr, 0, -2, body)
+
+    local win_height = ni.win_get_height(ctx.winid)
+
+    do --filling blank lines
+      ctx.short = math.max(win_height - #body - 1, 0) --query line
+      if ctx.short > 0 then buflines.prepends(ctx.bufnr, 0, listlib.zeros(ctx.short, "")) end
+    end
+
+    do --keep last line at the bottom of the window
+      local high = buflines.high(ctx.bufnr)
+      local toplnum = math.max(high - win_height + 1, 0)
+      unsafe.win_set_toplnum(ctx.winid, toplnum)
+    end
 
     signals.matches_updated(ctx, matches)
     signals.focus_moved(ctx, 0)
@@ -166,8 +173,8 @@ do
     uv.timer_start(self.timer, facts.update_interval, 0, updator)
   end
 
-  ---@param ctx beckon.Beckon.Context
-  ---@return beckon.Beckon.MatchesUpdator
+  ---@param ctx beckon.InvertBeckon.Context
+  ---@return beckon.InvertBeckon.MatchesUpdator
   function MatchesUpdator(ctx)
     return setmetatable({
       ctx = ctx,
@@ -236,9 +243,9 @@ end
 
 local buf_bind_rhs
 do
-  ---@class beckon.RHS
-  ---@field ctx     beckon.Beckon.Context
-  ---@field focus   integer               @0-based; impacted by query line, buf line count and win height
+  ---@class beckon.InvertBeckon.RHS
+  ---@field ctx beckon.InvertBeckon.Context
+  ---@field focus integer @0-based; impacted by query line, buf line count and win height
   ---@field on_pick beckon.OnPick
   local RHS = {}
   RHS.__index = RHS
@@ -248,15 +255,16 @@ do
     ni.win_close(0, false)
   end
 
-  function RHS:goto_query_line() feedkeys("ggA", "n") end
+  function RHS:goto_query_line() feedkeys("GA", "n") end
 
   ---@param action beckon.Action
   ---@return boolean? picked @nil=false
   function RHS:pick_cursor(action)
-    local lnum = wincursor.lnum()
-    if lnum == 0 then return jelly.info("not a match; query line") end
-
     local ctx = self.ctx
+
+    local lnum = wincursor.lnum()
+    if ctx.short > 0 and lnum <= ctx.short then return jelly.info("not a match; filling blank line") end
+    if lnum == contracts.query_lnum(ctx.bufnr) then return jelly.info("not a match; query line") end
 
     local line = assert(buflines.line(ctx.bufnr, lnum))
     local query = contracts.query(ctx.bufnr)
@@ -279,7 +287,7 @@ do
   function RHS:pick_focus(action)
     local ctx = self.ctx
 
-    local line = buflines.line(ctx.bufnr, contracts.focus_to_lnum(self.focus))
+    local line = buflines.line(ctx.bufnr, contracts.focus_to_lnum(ctx.bufnr, self.focus))
 
     if line == nil then
       close_current_win()
@@ -295,16 +303,16 @@ do
 
   function RHS:cancel() close_current_win() end
 
-  function RHS:insert_to_normal() feedkeys("<esc>j^", "n") end
+  function RHS:insert_to_normal() feedkeys("<esc>k^", "n") end
 
   ---@param step integer
   function RHS:move_focus(step)
     local ctx = self.ctx
-    self.focus = contracts.focus_jump(ctx.winid, ctx.bufnr, self.focus, step)
+    self.focus = contracts.focus_jump(ctx, self.focus, step)
     signals.focus_moved(ctx, self.focus)
   end
 
-  ---@param ctx beckon.Beckon.Context
+  ---@param ctx beckon.InvertBeckon.Context
   ---@param on_pick beckon.OnPick
   function buf_bind_rhs(ctx, on_pick)
     local bm = bufmap.wraps(ctx.bufnr)
@@ -333,14 +341,25 @@ do
     bm.i("<c-c>", function() rhs:cancel() end)
     bm.i("<c-d>", function() rhs:cancel() end)
 
-    bm.i("<c-n>", function() rhs:move_focus(1) end)
-    bm.i("<c-p>", function() rhs:move_focus(-1) end)
+    bm.i("<c-n>", function() rhs:move_focus(-1) end)
+    bm.i("<c-p>", function() rhs:move_focus(1) end)
 
     ---to keep consistent experience with fond
     bm.i("<esc>", function() rhs:cancel() end)
     bm.i("<c-[>", function() rhs:cancel() end)
     bm.i("<c-]>", function() rhs:insert_to_normal() end)
   end
+end
+
+---@param callback fun(key: string)
+local function on_first_key(callback)
+  vim.schedule(function() --to ensure no more inputs
+    vim.on_key(function(key)
+      ---@diagnostic disable-next-line: param-type-mismatch
+      vim.on_key(nil, facts.onkey_ns)
+      callback(key)
+    end, facts.onkey_ns)
+  end)
 end
 
 do --signal actions
@@ -352,36 +371,39 @@ do --signal actions
   ---@param matches string[]
   local function update_query_xmarks(bufnr, matches)
     if query_xmarks[bufnr] ~= nil then ni.buf_del_extmark(bufnr, facts.xm_query_ns, query_xmarks[bufnr]) end
-    query_xmarks[bufnr] = ni.buf_set_extmark(bufnr, facts.xm_query_ns, 0, 0, {
+
+    local lnum = contracts.query_lnum(bufnr)
+    query_xmarks[bufnr] = ni.buf_set_extmark(bufnr, facts.xm_query_ns, lnum, 0, {
       virt_text_pos = "eol",
       virt_text = { { string.format("#%d", #matches), "Comment" } },
     })
   end
 
-  ---@param bufnr integer
-  ---@param match_opts beckon.fuzzymatch.Opts
+  ---@param ctx beckon.InvertBeckon.Context
   ---@param matches string[]
-  local function update_token_highlights(bufnr, match_opts, matches)
-    ni.buf_clear_namespace(bufnr, facts.xm_hi_ns, 0, -1)
+  local function update_token_highlights(ctx, matches)
+    ni.buf_clear_namespace(ctx.bufnr, facts.xm_hi_ns, 0, -1)
 
     if #matches == 0 then return end
 
-    local token = contracts.query(bufnr)
+    local token = contracts.query(ctx.bufnr)
     if token == "" then return end
 
     ---currently it only processes the first page of the buffer,
     ---so there is no to use nvim_set_decoration_provider here
 
-    local n = ni.win_get_height(0)
+    local n = ni.win_get_height(ctx.winid)
     n = n - 1 --query line
+    n = n - ctx.short --filling blank lines
     assert(n > 0)
 
-    local his = himatch(itertools.head(matches, n), token, { strict_path = match_opts.strict_path })
+    local his = himatch(itertools.head(matches, n), token, { strict_path = ctx.match_opts.strict_path })
 
-    for index, ranges in itertools.enumerate(his) do
-      local lnum = index + 1 --query line
+    local offset = ctx.short
+    for i, ranges in itertools.enumerate(his) do
+      local lnum = i + offset
       for _, range in ipairs(ranges) do
-        ni.buf_set_extmark(bufnr, facts.xm_hi_ns, lnum, range[1], {
+        ni.buf_set_extmark(ctx.bufnr, facts.xm_hi_ns, lnum, range[1], {
           end_row = lnum,
           end_col = range[2] + 1,
           hl_group = "BeckonToken",
@@ -396,7 +418,7 @@ do --signal actions
     if not ni.buf_is_valid(ctx.bufnr) then return end
 
     update_query_xmarks(ctx.bufnr, matches)
-    update_token_highlights(ctx.bufnr, ctx.match_opts, matches)
+    update_token_highlights(ctx, matches)
   end)
 
   signals.on_focus_moved(function(args)
@@ -404,33 +426,20 @@ do --signal actions
 
     ni.buf_clear_namespace(ctx.bufnr, facts.xm_focus_ns, 0, -1)
 
-    local lnum = contracts.focus_to_lnum(focus)
+    local lnum = contracts.focus_to_lnum(ctx.bufnr, focus)
     ni.buf_add_highlight(ctx.bufnr, facts.xm_focus_ns, "BeckonFocusLine", lnum, 0, -1)
   end)
 end
 
----@param callback fun(key: string)
-local function on_first_key(callback)
-  vim.schedule(function() --to ensure no more inputs
-    vim.on_key(function(key)
-      ---@diagnostic disable-next-line: param-type-mismatch
-      vim.on_key(nil, facts.onkey_ns)
-      callback(key)
-    end, facts.onkey_ns)
-  end)
-end
-
----@alias beckon.OpenWin fun(purpose: string, bufnr: integer):winid:integer
-
----@class beckon.BeckonOpts
+---@class beckon.InvertBeckonOpts
 ---@field default_query? string
----@field strict_path?   boolean        @nil=false
----@field open_win?      beckon.OpenWin
+---@field strict_path? boolean @nil=false
+---@field open_win? beckon.OpenWin
 
----@param purpose    string @used for bufname, win title
+---@param purpose string @used for bufname, win title
 ---@param candidates string[]
----@param on_pick    beckon.OnPick
----@param opts?      beckon.BeckonOpts
+---@param on_pick beckon.OnPick
+---@param opts? beckon.BeckonOpts
 ---@return integer winid
 ---@return integer bufnr
 return function(purpose, candidates, on_pick, opts)
@@ -439,23 +448,23 @@ return function(purpose, candidates, on_pick, opts)
 
   local bufnr = Ephemeral({ modifiable = true, handyclose = true, namepat = string.format("beckon://%s/{bufnr}", purpose) })
   local winid = (opts.open_win or default_open_win)(purpose, bufnr)
-  local ctx = Context(winid, bufnr, { strict_path = opts.strict_path, sort = "asc" }, candidates)
+  local ctx = Context(winid, bufnr, { strict_path = opts.strict_path, sort = "desc" }, candidates)
 
   buf_bind_rhs(ctx, on_pick)
 
   local updator = MatchesUpdator(ctx)
 
-  do
+  do --match-body, query-foot
     local query = opts.default_query or ""
     ---@diagnostic disable-next-line: invisible
     updator:update(query, candidates)
-    buflines.replace(bufnr, 0, query)
+    buflines.replace(bufnr, -1, query)
   end
 
   local aug = augroups.BufAugroup(bufnr, true)
   aug:repeats({ "TextChangedI", "TextChanged" }, { callback = function() updator:on_update() end })
 
-  feedkeys("ggA", "n")
+  feedkeys("GA", "n")
 
   if opts.default_query ~= nil and opts.default_query ~= "" then
     on_first_key(function(key)

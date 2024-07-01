@@ -3,12 +3,12 @@ local M = {}
 local bufopen = require("infra.bufopen")
 local ctx = require("infra.ctx")
 local ex = require("infra.ex")
-local feedkeys = require("infra.feedkeys")
 local fs = require("infra.fs")
 local itertools = require("infra.itertools")
 local its = require("infra.its")
 local jelly = require("infra.jellyfish")("beckon", "debug")
 local listlib = require("infra.listlib")
+local mi = require("infra.mi")
 local ni = require("infra.ni")
 local prefer = require("infra.prefer")
 local project = require("infra.project")
@@ -16,8 +16,8 @@ local strlib = require("infra.strlib")
 local unsafe = require("infra.unsafe")
 local winsplit = require("infra.winsplit")
 
-local Beckon = require("beckon.Beckon")
 local facts = require("beckon.facts")
+local InvertBeckon = require("beckon.InvertBeckon")
 local ropes = require("string.buffer")
 
 local contracts = {}
@@ -107,7 +107,7 @@ do
       if #candidates == 0 then return jelly.info("no other buffers") end
     end
 
-    Beckon("buffers", candidates, function(query, action, line)
+    InvertBeckon("buffers", candidates, function(query, action, line)
       last_query = query
 
       local _, bufnr = contracts.parse_line(line)
@@ -153,7 +153,7 @@ do
         :tolist()
     end
 
-    Beckon("args", candidates, function(query, action, line)
+    InvertBeckon("args", candidates, function(query, action, line)
       last_query = query
 
       local _, i = contracts.parse_line(line)
@@ -180,7 +180,7 @@ do
   function M.digraphs()
     if #candidates == 0 then candidates = load_digraphs() end
 
-    Beckon("digraphs", candidates, function(query, _, line)
+    InvertBeckon("digraphs", candidates, function(query, _, line)
       last_query = query
 
       local char = assert(strlib.iter_splits(line, " ")())
@@ -205,7 +205,7 @@ do
   function M.emojis()
     if #candidates == 0 then candidates = load_emojis() end
 
-    Beckon("emojis", candidates, function(query, _, line)
+    InvertBeckon("emojis", candidates, function(query, _, line)
       last_query = query
 
       local char = assert(strlib.iter_splits(line, " ")())
@@ -268,7 +268,7 @@ do
       end
     end
 
-    Beckon("windows", candidates, function(query, action, line)
+    InvertBeckon("windows", candidates, function(query, action, line)
       last_query = query
 
       local _, winid, bufnr = contracts.parse_line(line)
@@ -282,16 +282,23 @@ end
 
 do
   local last_query
+
   function M.cmds()
-    local hist = listlib.reversed(itertools.tolist(unsafe.hist_iter()))
-    Beckon("windows", hist, function(query, action, line)
+    local hist
+    do
+      hist = its(unsafe.hist_iter()) --
+        --skip those line-jumping
+        :filter(function(el) return select(1, string.match(el, "^%d+$")) == nil end)
+        :tolist()
+      hist = listlib.reversed(hist)
+    end
+    InvertBeckon("windows", hist, function(query, action, line)
       last_query = query
 
       if action == "space" or action == "cr" then
         ex.eval(line)
       else
-        feedkeys.codes(":", "n")
-        feedkeys.keys(line, "n")
+        mi.setcmdline(":", line)
       end
     end, { default_query = last_query })
   end
