@@ -25,6 +25,7 @@ i need a lightweight fuzzy matching picker in nvim to replace fzf in **some spec
     * have vim modes
     * use motion plugins
 * an impl of vim.ui.select
+* two ui layouts, which equal to fzf --layout={default,reverse}
 
 ## status
 * just works
