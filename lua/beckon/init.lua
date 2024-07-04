@@ -292,7 +292,7 @@ do
         :tolist()
       hist = listlib.reversed(hist)
     end
-    InvertBeckon("windows", hist, function(query, action, line)
+    InvertBeckon("cmds", hist, function(query, action, line)
       last_query = query
 
       if action == "space" or action == "cr" then

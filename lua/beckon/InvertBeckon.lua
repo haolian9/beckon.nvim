@@ -143,7 +143,7 @@ do
     end
 
     --keep last line at the bottom of the window
-    wincursor.follow(ctx.winid, true)
+    wincursor.follow(ctx.winid, "stay")
 
     signals.matches_updated(ctx, matches)
     signals.focus_moved(ctx, 0)
@@ -211,7 +211,7 @@ do
     local height, row
     if win_height > 15 then
       height = math.floor(win_height * 0.45)
-      row = math.max(win_row - 1, 0)
+      row = math.max(win_row - height - 1, 0)
     else
       height = win_height - 2 -- borders
       row = 0
@@ -224,8 +224,7 @@ do
   ---@param bufnr integer
   ---@return integer winid
   function default_open_win(purpose, bufnr)
-    local _ = purpose
-    local winopts = { relative = "win", border = "single", zindex = 250 }
+    local winopts = { relative = "win", border = "single", zindex = 250, footer = string.format("beckon://%s", purpose), footer_pos = "center" }
     local host_winid = ni.get_current_win()
     dictlib.merge(winopts, resolve_geometry(host_winid))
 
@@ -341,6 +340,8 @@ do
 
     bm.i("<c-n>", function() rhs:move_focus(-1) end)
     bm.i("<c-p>", function() rhs:move_focus(1) end)
+    bm.i("<c-j>", function() rhs:move_focus(-1) end)
+    bm.i("<c-k>", function() rhs:move_focus(1) end)
 
     ---to keep consistent experience with fond
     bm.i("<esc>", function() rhs:cancel() end)
@@ -436,11 +437,6 @@ do --signal actions
     ni.buf_add_highlight(ctx.bufnr, facts.xm_focus_ns, "BeckonFocusLine", lnum, 0, -1)
   end)
 end
-
----@class beckon.InvertBeckonOpts
----@field default_query? string
----@field strict_path? boolean @nil=false
----@field open_win? beckon.OpenWin
 
 ---@param purpose string @used for bufname, win title
 ---@param candidates string[]

@@ -1,36 +1,9 @@
-local buflines = require("infra.buflines")
-local itertools = require("infra.itertools")
 local its = require("infra.its")
 local ni = require("infra.ni")
 local rifts = require("infra.rifts")
-local unsafe = require("infra.unsafe")
 
 local Beckon = require("beckon.Beckon")
 local facts = require("beckon.facts")
-
----keep the same as puff.select
----@param purpose string
----@param bufnr integer
-local function open_win(purpose, bufnr)
-  local _ = purpose
-
-  local win_height, win_width
-  do
-    local line_count = buflines.count(bufnr)
-    local line_max = 0
-    for _, len in unsafe.linelen_iter(bufnr, itertools.range(line_count)) do
-      if len > line_max then line_max = len end
-    end
-
-    win_height = line_count
-    win_width = line_max + 1
-  end
-
-  local winopts = { relative = "cursor", row = 1, col = 0, width = win_width, height = win_height }
-  local winid = rifts.open.win(bufnr, true, winopts)
-
-  return winid
-end
 
 ---@class beckon.select.Opts
 ---@field prompt? string
@@ -51,6 +24,19 @@ return function(entries, opts, on_select)
     :enumerate1()
     :mapn(function(i, ent) return string.format("%s (%d)", opts.format_item(ent), i) end)
     :tolist()
+
+  local function open_win(_, bufnr)
+    local height = #entries + 1 -- query line
+
+    --todo: avoid evaluating opts.format_item twice
+    local width = its(entries):map(opts.format_item):map(string.len):max()
+    width = math.max(width + 2, 20)
+
+    local winopts = { relative = "cursor", row = 1, col = 0, width = width, height = height }
+    local winid = rifts.open.win(bufnr, true, winopts)
+
+    return winid
+  end
 
   local _, bufnr = Beckon("select", candidates, function(_, action, line)
     local index = assert(string.match(line, "%((%d+)%)$"))

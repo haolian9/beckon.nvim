@@ -81,15 +81,14 @@ do
     return focus + 1 --query line
   end
 
-  ---@param winid integer
-  ---@param bufnr integer
+  ---@param ctx beckon.Beckon.Context
   ---@param step integer @accepts negative
   ---@return integer?
-  function contracts.focus_jump(winid, bufnr, focus, step)
+  function contracts.focus_jump(ctx, focus, step)
     local high
     do
-      local win_height = ni.win_get_height(winid)
-      local line_count = buflines.count(bufnr)
+      local win_height = ni.win_get_height(ctx.winid)
+      local line_count = buflines.count(ctx.bufnr)
       if line_count < win_height then
         high = line_count
       else
@@ -100,14 +99,14 @@ do
       if high < 1 then return end
     end
 
-    local jump = focus + step
+    local dest = focus + step
 
-    if jump < 0 then -- -1=high
-      return high - ((-jump % (high + 1)) - 1)
-    elseif jump > high then
-      return jump % (high + 1)
+    if dest < 0 then -- -1=high
+      return high - ((-dest % (high + 1)) - 1)
+    elseif dest > high then
+      return dest % (high + 1)
     else
-      return jump
+      return dest
     end
   end
 end
@@ -223,8 +222,7 @@ do
   ---@param bufnr integer
   ---@return integer winid
   function default_open_win(purpose, bufnr)
-    local _ = purpose
-    local winopts = { relative = "win", border = "single", zindex = 250 }
+    local winopts = { relative = "win", border = "single", zindex = 250, footer = string.format("beckon://%s", purpose), footer_pos = "center" }
     local host_winid = ni.get_current_win()
     dictlib.merge(winopts, resolve_geometry(host_winid))
 
@@ -302,7 +300,7 @@ do
   ---@param step integer
   function RHS:move_focus(step)
     local ctx = self.ctx
-    local dest = contracts.focus_jump(ctx.winid, ctx.bufnr, self.focus, step)
+    local dest = contracts.focus_jump(ctx, self.focus, step)
     self.focus = dest or 0
     if dest == nil then return jelly.warn("no matches to focus") end
     signals.focus_moved(ctx, self.focus)
@@ -339,12 +337,25 @@ do
 
     bm.i("<c-n>", function() rhs:move_focus(1) end)
     bm.i("<c-p>", function() rhs:move_focus(-1) end)
+    bm.i("<c-j>", function() rhs:move_focus(1) end)
+    bm.i("<c-k>", function() rhs:move_focus(-1) end)
 
     ---to keep consistent experience with fond
     bm.i("<esc>", function() rhs:cancel() end)
     bm.i("<c-[>", function() rhs:cancel() end)
     bm.i("<c-]>", function() rhs:insert_to_normal() end)
   end
+end
+
+---@param callback fun(key: string)
+local function on_first_key(callback)
+  vim.schedule(function() --to ensure no more inputs
+    vim.on_key(function(key)
+      ---@diagnostic disable-next-line: param-type-mismatch
+      vim.on_key(nil, facts.onkey_ns)
+      callback(key)
+    end, facts.onkey_ns)
+  end)
 end
 
 do --signal actions
@@ -362,30 +373,33 @@ do --signal actions
     })
   end
 
-  ---@param bufnr integer
-  ---@param match_opts beckon.fuzzymatch.Opts
+  ---@param ctx beckon.Beckon.Context
   ---@param matches string[]
-  local function update_token_highlights(bufnr, match_opts, matches)
-    ni.buf_clear_namespace(bufnr, facts.xm_hi_ns, 0, -1)
+  local function update_token_highlights(ctx, matches)
+    ni.buf_clear_namespace(ctx.bufnr, facts.xm_hi_ns, 0, -1)
 
     if #matches == 0 then return end
 
-    local token = contracts.query(bufnr)
+    local token = contracts.query(ctx.bufnr)
     if token == "" then return end
 
     ---currently it only processes the first page of the buffer,
     ---so there is no to use nvim_set_decoration_provider here
 
-    local n = ni.win_get_height(0)
-    n = n - 1 --query line
-    assert(n > 0)
+    local lines
+    do
+      local n = ni.win_get_height(0)
+      n = n - 1 --query line
+      assert(n > 0)
+      lines = itertools.head(matches, n)
+    end
 
-    local his = himatch(itertools.head(matches, n), token, { strict_path = match_opts.strict_path })
+    local his = himatch(lines, token, { strict_path = ctx.match_opts.strict_path })
 
-    for index, ranges in itertools.enumerate(his) do
-      local lnum = index + 1 --query line
+    for i, ranges in itertools.enumerate(his) do
+      local lnum = i + 1 --query line
       for _, range in ipairs(ranges) do
-        ni.buf_set_extmark(bufnr, facts.xm_hi_ns, lnum, range[1], {
+        ni.buf_set_extmark(ctx.bufnr, facts.xm_hi_ns, lnum, range[1], {
           end_row = lnum,
           end_col = range[2] + 1,
           hl_group = "BeckonToken",
@@ -400,7 +414,7 @@ do --signal actions
     if not ni.buf_is_valid(ctx.bufnr) then return end
 
     update_query_xmarks(ctx.bufnr, matches)
-    update_token_highlights(ctx.bufnr, ctx.match_opts, matches)
+    update_token_highlights(ctx, matches)
   end)
 
   signals.on_focus_moved(function(args)
@@ -410,17 +424,6 @@ do --signal actions
 
     local lnum = contracts.focus_to_lnum(focus)
     ni.buf_add_highlight(ctx.bufnr, facts.xm_focus_ns, "BeckonFocusLine", lnum, 0, -1)
-  end)
-end
-
----@param callback fun(key: string)
-local function on_first_key(callback)
-  vim.schedule(function() --to ensure no more inputs
-    vim.on_key(function(key)
-      ---@diagnostic disable-next-line: param-type-mismatch
-      vim.on_key(nil, facts.onkey_ns)
-      callback(key)
-    end, facts.onkey_ns)
   end)
 end
 
