@@ -460,9 +460,10 @@ return function(purpose, candidates, on_pick, opts)
 
   do
     local query = opts.default_query or ""
+    --hack: unlike in InvertBeckon, have to set query-line first here
+    buflines.replace(bufnr, 0, query)
     ---@diagnostic disable-next-line: invisible
     updator:update(query, candidates)
-    buflines.replace(bufnr, 0, query)
   end
 
   local aug = augroups.BufAugroup(bufnr, true)

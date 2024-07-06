@@ -17,7 +17,7 @@ local last_queries = LRU(512)
 ---* skip: #line == 0
 ---* truncate: #line>300
 ---@param host_winid? integer @nil=current-win
----@param callback? fun(row:integer, action:beckon.Action) @nil=move-cursor
+---@param callback? fun(lnum:integer, action:beckon.Action) @nil=move-cursor
 ---@param opts? {remember:boolean?}
 return function(host_winid, callback, opts)
   host_winid = host_winid or ni.get_current_win()

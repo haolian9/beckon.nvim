@@ -25,17 +25,24 @@ return function(entries, opts, on_select)
     :mapn(function(i, ent) return string.format("%s (%d)", opts.format_item(ent), i) end)
     :tolist()
 
-  local function open_win(_, bufnr)
-    local height = #entries + 1 -- query line
+  local open_win
+  if opts.open_win then
+    open_win = opts.open_win
+  else
+    open_win = function(_, bufnr)
+      local height = #entries + 1 -- query line
 
-    --todo: avoid evaluating opts.format_item twice
-    local width = its(entries):map(opts.format_item):map(string.len):max()
-    width = math.max(width + 2, 20)
+      --todo: avoid evaluating opts.format_item twice
+      local width = its(entries):map(opts.format_item):map(string.len):max()
+      width = width + 2 --signcolumn=yes:1
+      width = width + #" (99) "
+      width = math.max(width, 20) --prompt could be long
 
-    local winopts = { relative = "cursor", row = 1, col = 0, width = width, height = height }
-    local winid = rifts.open.win(bufnr, true, winopts)
+      local winopts = { relative = "cursor", row = 1, col = 0, width = width, height = height }
+      local winid = rifts.open.win(bufnr, true, winopts)
 
-    return winid
+      return winid
+    end
   end
 
   local _, bufnr = Beckon("select", candidates, function(_, action, line)
