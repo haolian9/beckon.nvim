@@ -227,7 +227,6 @@ do
     dictlib.merge(winopts, resolve_geometry(host_winid))
 
     local winid = rifts.open.win(bufnr, true, winopts)
-
     ni.win_set_hl_ns(winid, facts.floatwin_ns)
 
     return winid

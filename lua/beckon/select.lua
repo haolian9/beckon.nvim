@@ -40,6 +40,7 @@ return function(entries, opts, on_select)
 
       local winopts = { relative = "cursor", row = 1, col = 0, width = width, height = height }
       local winid = rifts.open.win(bufnr, true, winopts)
+      ni.win_set_hl_ns(winid, facts.floatwin_ns)
 
       return winid
     end
