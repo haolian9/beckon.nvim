@@ -469,7 +469,7 @@ return function(purpose, candidates, on_pick, opts)
     buflines.replace(bufnr, -1, query)
   end
 
-  local aug = augroups.BufAugroup(bufnr, true)
+  local aug = augroups.BufAugroup(bufnr, "beckon", true)
   aug:repeats({ "TextChangedI", "TextChanged" }, { callback = function() updator:on_update() end })
 
   feedkeys("GA", "n")

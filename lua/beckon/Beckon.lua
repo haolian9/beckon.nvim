@@ -465,7 +465,7 @@ return function(purpose, candidates, on_pick, opts)
     updator:update(query, candidates)
   end
 
-  local aug = augroups.BufAugroup(bufnr, true)
+  local aug = augroups.BufAugroup(bufnr, "beckon", true)
   aug:repeats({ "TextChangedI", "TextChanged" }, { callback = function() updator:on_update() end })
 
   feedkeys("ggA", "n")

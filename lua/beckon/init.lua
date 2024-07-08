@@ -298,7 +298,7 @@ do
       if action == "space" or action == "cr" then
         ex.eval(line)
       else
-        mi.setcmdline(":", line)
+        mi.setcmdline("%s", line)
       end
     end, { default_query = last_query })
   end
