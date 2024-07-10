@@ -470,7 +470,7 @@ return function(purpose, candidates, on_pick, opts)
   end
 
   local aug = augroups.BufAugroup(bufnr, "beckon", true)
-  aug:repeats({ "TextChangedI", "TextChanged" }, { callback = function() updator:on_update() end })
+  aug:repeats({ "TextChangedI", "TextChanged", "WinResized" }, { callback = function() updator:on_update() end })
 
   feedkeys("GA", "n")
 

@@ -15,8 +15,10 @@ local facts = require("beckon.facts")
 ---@generic T
 ---@param entries T[]
 ---@param opts beckon.select.Opts
----@param on_select  fun(entry:T?, row:integer?, action:beckon.Action) @row:1-based
+---@param on_select  fun(entry:T?, index:integer?, action?:beckon.Action) @index:1-based
 return function(entries, opts, on_select)
+  if #entries == 0 then return on_select() end
+
   if opts.format_item == nil then opts.format_item = function(s) return s end end
 
   ---@type string[] @pattern="{entry} (index)"
