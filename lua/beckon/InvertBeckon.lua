@@ -368,11 +368,10 @@ do --signal actions
 
   ---@param bufnr integer
   ---@param matches string[]
-  local function update_query_xmarks(bufnr, matches)
-    if query_xmarks[bufnr] ~= nil then ni.buf_del_extmark(bufnr, facts.xm_query_ns, query_xmarks[bufnr]) end
-
+  local function upsert_query_xmarks(bufnr, matches)
     local lnum = contracts.query_lnum(bufnr)
     query_xmarks[bufnr] = ni.buf_set_extmark(bufnr, facts.xm_query_ns, lnum, 0, {
+      id = query_xmarks[bufnr],
       virt_text_pos = "eol",
       virt_text = { { string.format("#%d", #matches), "Comment" } },
     })
@@ -424,7 +423,7 @@ do --signal actions
     local ctx, matches = args.data.ctx, args.data.matches
     if not ni.buf_is_valid(ctx.bufnr) then return end
 
-    update_query_xmarks(ctx.bufnr, matches)
+    upsert_query_xmarks(ctx.bufnr, matches)
     update_token_highlights(ctx, matches)
   end)
 
