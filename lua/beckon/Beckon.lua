@@ -53,7 +53,7 @@ end
 
 local signals = {}
 do
-  local aug = augroups.Augroup("beckon")
+  local aug = augroups.Augroup("beckon://beckon")
 
   ---@param ctx beckon.Beckon.Context
   ---@param matches string[]

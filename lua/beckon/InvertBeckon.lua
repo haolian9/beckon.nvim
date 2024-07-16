@@ -41,7 +41,7 @@ end
 
 local signals = {}
 do
-  local aug = augroups.Augroup("beckon:invert")
+  local aug = augroups.Augroup("beckon://invert")
 
   ---@param ctx beckon.InvertBeckon.Context
   ---@param matches string[]
