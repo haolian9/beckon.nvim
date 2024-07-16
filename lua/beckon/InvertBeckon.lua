@@ -41,7 +41,7 @@ end
 
 local signals = {}
 do
-  local aug = augroups.Augroup("beckon")
+  local aug = augroups.Augroup("beckon:invert")
 
   ---@param ctx beckon.InvertBeckon.Context
   ---@param matches string[]
@@ -110,7 +110,7 @@ do
   ---@field private ready        boolean @whether ready for update
   ---@field private last_token   string
   ---@field private last_matches string[]
-  ---@field private timer        ffi.cdata*
+  ---@field private timer        uv_timer_t
   local Impl = {}
   Impl.__index = Impl
 
@@ -166,8 +166,8 @@ do
     end
 
     local updator = vim.schedule_wrap(function() self:update(token, candidates) end)
-    uv.timer_stop(self.timer)
-    uv.timer_start(self.timer, facts.update_interval, 0, updator)
+    self.timer:stop()
+    self.timer:start(facts.update_interval, 0, updator)
   end
 
   ---@param ctx beckon.InvertBeckon.Context
