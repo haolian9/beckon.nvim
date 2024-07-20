@@ -61,7 +61,7 @@ do
     if prefer.bo(bufnr, "buftype") ~= "" then return end
 
     local bufname = ni.buf_get_name(bufnr)
-    if strlib.find(bufname, "://") then return end
+    if strlib.contains(bufname, "://") then return end
 
     return true
   end
