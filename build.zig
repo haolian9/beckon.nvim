@@ -7,7 +7,7 @@ pub fn build(b: *std.Build) void {
     {
         const lib = b.addSharedLibrary(.{
             .name = "zf",
-            .root_source_file = .{ .path = "src/zf/clib.zig" },
+            .root_source_file = b.path("src/zf/clib.zig"),
             .target = target,
             .optimize = optimize,
         });

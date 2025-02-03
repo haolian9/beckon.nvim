@@ -321,6 +321,7 @@ do
     bm.i("<space>", function() rhs:pick_focus("space") end)
     bm.i("<c-m>", function() rhs:pick_focus("cr") end)
     bm.i("<c-/>", function() rhs:pick_focus("v") end)
+    bm.i("<c-_>", function() rhs:pick_focus("v") end)
     bm.i("<c-i>", function() rhs:pick_focus("i") end)
     ---no mapping <c-a> here, as i mapped it to <home>
     bm.i("<c-v>", function() rhs:pick_focus("v") end)
@@ -388,7 +389,7 @@ do --signal actions
     if token == "" then return end
 
     ---currently it only processes the first page of the buffer,
-    ---so there is no to use nvim_set_decoration_provider here
+    ---so there is need no to use nvim_set_decoration_provider here
 
     local start_lnum, stop_lnum
     do

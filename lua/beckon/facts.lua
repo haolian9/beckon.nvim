@@ -19,7 +19,7 @@ do
     hi("BeckonToken", { fg = 9, bold = true })
   end
 
-  assert(ni.get_hl_by_name("BeckonFocusLine", false).foreground == nil)
+  assert(ni.get_hl(0, { name = "BeckonFocusLine", create = false }).fg == nil)
 end
 
 do
