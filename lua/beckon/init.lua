@@ -1,5 +1,7 @@
 local M = {}
 
+local ropes = require("string.buffer")
+
 local bufopen = require("infra.bufopen")
 local ctx = require("infra.ctx")
 local ex = require("infra.ex")
@@ -18,7 +20,6 @@ local winsplit = require("infra.winsplit")
 
 local facts = require("beckon.facts")
 local InvertBeckon = require("beckon.InvertBeckon")
-local ropes = require("string.buffer")
 
 local contracts = {}
 do
@@ -73,7 +74,7 @@ do
     local bufname = ni.buf_get_name(bufnr)
     if bufname == "" then return "__" end
     local relative = fs.relative_path(root, bufname)
-    return fs.shorten(relative or bufname)
+    return fs.shorten(relative or bufname, true)
   end
 
   local acts = {}
@@ -122,7 +123,7 @@ do
   ---@param root string
   ---@param arg string
   ---@return string
-  local function resolve_argname(root, arg) return fs.shorten(fs.relative_path(root, arg) or arg) or arg end
+  local function resolve_argname(root, arg) return fs.shorten(fs.relative_path(root, arg) or arg, true) or arg end
 
   local acts = {}
   do
@@ -261,7 +262,7 @@ do
           local bufnr = ni.win_get_buf(winid)
           local winnr = ni.win_get_number(winid)
           local bufname = ni.buf_get_name(bufnr)
-          bufname = bufname == "" and "__" or fs.shorten(bufname)
+          bufname = bufname == "" and "__" or fs.shorten(bufname, true)
 
           table.insert(candidates, contracts.format_line(string.format("%d.%d %s", tabnr, winnr, bufname), winid, bufnr))
         end
