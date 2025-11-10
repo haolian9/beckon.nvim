@@ -1,3 +1,5 @@
+local new_table = require("table.new")
+
 local unsafe = require("beckon.unsafe")
 
 ---@class beckon.fuzzymatch.Opts
@@ -57,7 +59,7 @@ return function(candidates, token, opts)
     error("unreachable")
   end
 
-  local matches = {}
+  local matches = new_table(#ranks, 0)
   for i, tuple in ipairs(ranks) do
     matches[i] = tuple[1]
   end
