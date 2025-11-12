@@ -29,6 +29,7 @@ do
   ---@field bufnr integer
   ---@field match_opts beckon.fuzzymatch.Opts
   ---@field all_candidates string[]
+  ---@field focus integer @0-based; impacted by query line, buf line count and win height
   ---
   ---@field short integer
 
@@ -36,7 +37,7 @@ do
   ---@param bufnr integer
   ---@param match_opts beckon.fuzzymatch.Opts
   ---@return beckon.InvertBeckon.Context
-  function Context(winid, bufnr, match_opts, all_candidates) return { winid = winid, bufnr = bufnr, match_opts = match_opts, all_candidates = all_candidates, short = 0 } end
+  function Context(winid, bufnr, match_opts, all_candidates) return { winid = winid, bufnr = bufnr, match_opts = match_opts, all_candidates = all_candidates, focus = 0, short = 0 } end
 end
 
 local signals = {}
@@ -50,9 +51,8 @@ do
   function signals.on_matches_updated(callback) aug:repeats("User", { pattern = "beckon:invert:matches_updated", callback = callback }) end
 
   ---@param ctx beckon.InvertBeckon.Context
-  ---@param focus integer
-  function signals.focus_moved(ctx, focus) aug:emit("User", { pattern = "beckon:invert:focus_moved", data = { ctx = ctx, focus = focus } }) end
-  ---@param callback fun(args: {data: {ctx:beckon.InvertBeckon.Context, focus:integer}})
+  function signals.focus_moved(ctx) aug:emit("User", { pattern = "beckon:invert:focus_moved", data = { ctx = ctx } }) end
+  ---@param callback fun(args: {data: {ctx:beckon.InvertBeckon.Context}})
   function signals.on_focus_moved(callback) aug:repeats("User", { pattern = "beckon:invert:focus_moved", callback = callback }) end
 end
 
@@ -75,7 +75,7 @@ do
   ---@param ctx beckon.InvertBeckon.Context
   ---@param step integer @accepts negative
   ---@return integer?
-  function contracts.focus_jump(ctx, focus, step)
+  function contracts.focus_jump_target(ctx, step)
     local high
     do
       local win_height = ni.win_get_height(ctx.winid)
@@ -91,7 +91,7 @@ do
       if high < 1 then return end
     end
 
-    local dest = focus + step
+    local dest = ctx.focus + step
 
     if dest < 0 then -- -1=high
       return high - ((-dest % (high + 1)) - 1)
@@ -145,8 +145,10 @@ do
     --keep last line at the bottom of the window
     wincursor.follow(ctx.winid, "stay")
 
+    ctx.focus = 0
+
     signals.matches_updated(ctx, matches)
-    signals.focus_moved(ctx, 0)
+    signals.focus_moved(ctx)
   end
 
   function Impl:on_update()
@@ -240,7 +242,6 @@ local buf_bind_rhs
 do
   ---@class beckon.InvertBeckon.RHS
   ---@field ctx beckon.InvertBeckon.Context
-  ---@field focus integer @0-based; impacted by query line, buf line count and win height
   ---@field on_pick beckon.OnPick
   local RHS = {}
   RHS.__index = RHS
@@ -282,7 +283,7 @@ do
   function RHS:pick_focus(action)
     local ctx = self.ctx
 
-    local line = buflines.line(ctx.bufnr, contracts.focus_to_lnum(ctx.bufnr, self.focus))
+    local line = buflines.line(ctx.bufnr, contracts.focus_to_lnum(ctx.bufnr, ctx.focus))
 
     if line == nil then
       close_current_win()
@@ -303,17 +304,17 @@ do
   ---@param step integer
   function RHS:move_focus(step)
     local ctx = self.ctx
-    local dest = contracts.focus_jump(ctx, self.focus, step)
-    self.focus = dest or 0
+    local dest = contracts.focus_jump_target(ctx, step)
+    ctx.focus = dest or 0
     if dest == nil then return jelly.warn("no matches to focus") end
-    signals.focus_moved(ctx, self.focus)
+    signals.focus_moved(ctx)
   end
 
   ---@param ctx beckon.InvertBeckon.Context
   ---@param on_pick beckon.OnPick
   function buf_bind_rhs(ctx, on_pick)
     local bm = bufmap.wraps(ctx.bufnr)
-    local rhs = setmetatable({ ctx = ctx, focus = 0, on_pick = on_pick }, RHS)
+    local rhs = setmetatable({ ctx = ctx, on_pick = on_pick }, RHS)
 
     bm.n("gi", function() rhs:goto_query_line() end)
 
@@ -429,11 +430,11 @@ do --signal actions
   end)
 
   signals.on_focus_moved(function(args)
-    local ctx, focus = args.data.ctx, args.data.focus
+    local ctx = args.data.ctx
 
     ni.buf_clear_namespace(ctx.bufnr, facts.xm_focus_ns, 0, -1)
 
-    local lnum = contracts.focus_to_lnum(ctx.bufnr, focus)
+    local lnum = contracts.focus_to_lnum(ctx.bufnr, ctx.focus)
     ni.buf_add_highlight(ctx.bufnr, facts.xm_focus_ns, "BeckonFocusLine", lnum, 0, -1)
   end)
 end
