@@ -12,7 +12,7 @@ local InvertBeckon = require("beckon.InvertBeckon")
 local last_queries = LRU(512)
 
 ---limits:
----* assert: 3 < buf.lines < 999
+---* assert: 3 < buf.lines < 9999
 ---* assert: win.height >= 2
 ---* skip: #line == 0
 ---* truncate: #line>300
@@ -27,7 +27,7 @@ return function(host_winid, callback, opts)
   local host_bufnr = ni.win_get_buf(host_winid)
 
   local line_count = buflines.count(host_bufnr)
-  if not (line_count > 3 and line_count < 999) then return jelly.warn("too few/many lines to beckonize") end
+  if not (line_count > 3 and line_count < 9999) then return jelly.warn("too few/many lines to beckonize") end
 
   ---@type {height:integer, width:integer, relative:string}
   local host_wincfg = ni.win_get_config(host_winid)
