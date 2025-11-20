@@ -20,6 +20,7 @@ local iuv = require("infra.iuv")
 local jelly = require("infra.jellyfish")("beckon", "debug")
 local bufmap = require("infra.keymap.buffer")
 local listlib = require("infra.listlib")
+local mi = require("infra.mi")
 local ni = require("infra.ni")
 local prefer = require("infra.prefer")
 local rifts = require("infra.rifts")
@@ -424,7 +425,7 @@ do --signal actions
     ni.buf_clear_namespace(ctx.bufnr, facts.xm_focus_ns, 0, -1)
 
     local lnum = contracts.focus_to_lnum(ctx.focus)
-    ni.buf_add_highlight(ctx.bufnr, facts.xm_focus_ns, "BeckonFocusLine", lnum, 0, -1)
+    mi.buf_highlight_line(ctx.bufnr, facts.xm_focus_ns, lnum, "BeckonFocusLine")
   end)
 end
 

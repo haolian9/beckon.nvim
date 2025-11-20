@@ -2,6 +2,7 @@ local buflines = require("infra.buflines")
 local its = require("infra.its")
 local jelly = require("infra.jellyfish")("beckon.beckonize", "debug")
 local LRU = require("infra.LRU")
+local mi = require("infra.mi")
 local ni = require("infra.ni")
 local prefer = require("infra.prefer")
 local rifts = require("infra.rifts")
@@ -16,11 +17,11 @@ local last_queries = LRU(512)
 ---* assert: win.height >= 2
 ---* skip: #line == 0
 ---* truncate: #line>300
----@param host_winid? integer @nil=current-win
+---@param host_winid? integer
 ---@param callback? fun(lnum:integer, action:beckon.Action) @nil=move-cursor
 ---@param opts? {remember:boolean?}
 return function(host_winid, callback, opts)
-  host_winid = host_winid or ni.get_current_win()
+  host_winid = mi.resolve_winid_param(host_winid)
   callback = callback or function(lnum) wincursor.go(host_winid, lnum, 0) end
   opts = opts or {}
 
