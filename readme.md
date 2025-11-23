@@ -12,10 +12,10 @@ i need a lightweight fuzzy matching picker in nvim to replace fzf in **some spec
     * may suffer the limits of nvim buffer: memory consumption, highlight, undo history, and something i dont know yet
         * note: the undo history of beckon buffers are disabled
 * no fancy UI
+* no preview
 * no seperated windows for user input and matched result
     * and unexpected user operations to buffers may cause troubles likely
-* default query / placeholder
-* clear the default query when user input something new
+* default query / placeholder, and gets cleared once user inputs something new
 * multiple actions for the picked entry
     * n_{i,o,v,t}, i_c-{m,o,/,t}
     * depends on the source/provider, of course
@@ -24,8 +24,9 @@ i need a lightweight fuzzy matching picker in nvim to replace fzf in **some spec
 * since it's a buffer, you can:
     * have vim modes
     * use motion plugins
-* an impl of vim.ui.select
 * two ui layouts, which equal to fzf --layout={default,reverse}
+* an impl of vim.ui.select: `require'beckon.select'`
+* able to make any buffer fuzzy-pickable: `require'beckon.Beckonize'`
 
 ## status
 * just works
@@ -41,17 +42,16 @@ i need a lightweight fuzzy matching picker in nvim to replace fzf in **some spec
     * yet, nvim_set_decoration_provider is not being used.
 
 ## sources
-* [x] buffers
-* [x] arglist
-* [x] digraphs
-* [x] emojis
-* [x] windows
-* [ ] lsp document symbol
-* [x] cmds/history
+* buffers
+* arglist
+* digraphs
+* emojis
+* windows
+* cmds/history
 
 ## prerequisites
 * zig 0.12
-* nvim 0.10.*
+* nvim 0.11.*
 * haolian9/infra.nvim
 
 ## usage
