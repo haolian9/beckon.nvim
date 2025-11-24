@@ -423,7 +423,7 @@ do --signal actions
     local ctx = args.data.ctx
 
     ni.buf_clear_namespace(ctx.bufnr, facts.xm_focus_ns, 0, -1)
-
+    if ctx.focus == 0 then return end
     local lnum = contracts.focus_to_lnum(ctx.focus)
     mi.buf_highlight_line(ctx.bufnr, facts.xm_focus_ns, lnum, "BeckonFocusLine")
   end)
